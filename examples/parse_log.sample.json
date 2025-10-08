@@ -1,0 +1,19 @@
+{
+  "pipeline": "mvp",
+  "schema.version": "0.1.0",
+  "inputs": [
+    {
+      "path": "data/6d-1-1.csv",
+      "encoding": "utf-8-sig",
+      "delimiter": ",",
+      "headers": ["year", "..."],
+      "stats": {
+        "rows_in": 1234,
+        "rows_out": 5678,
+        "numeric_columns": ["value_A", "value_B"],
+        "year_column": "year"
+      }
+    }
+  ]
+}
+

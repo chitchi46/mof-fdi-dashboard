@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import http.server
+import os
+import socketserver
+
+
+INDEX_HTML = """<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>InvestViz Dashboard (MVP)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans JP', sans-serif; margin: 0; }
+    header { padding: 12px 16px; background: #0f172a; color: #fff; }
+    main { padding: 16px; }
+    #controls { margin-bottom: 8px; }
+    select { padding: 4px 8px; margin-right: 8px; }
+    #chart { width: 100%; height: 420px; border: 1px solid #e5e7eb; }
+    .meta { color: #475569; font-size: 12px; margin-top: 8px; }
+  </style>
+  <script>
+let gData = null;
+
+async function loadSummary() {
+  const res = await fetch('summary.json');
+  if (!res.ok) throw new Error('summary.json 縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ');
+  const data = await res.json();
+  gData = data;
+  document.getElementById('title').textContent = data.title || 'InvestViz Dashboard (MVP)';
+  const measureSelect = document.getElementById('measure');
+  measureSelect.innerHTML = '';
+  (data.series || []).forEach((s, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = s.label || `series_${i}`;
+    measureSelect.appendChild(opt);
+  });
+  draw();
+}
+
+function draw(){
+  const canvas = document.getElementById('chart');
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * devicePixelRatio;
+  canvas.height = rect.height * devicePixelRatio;
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  ctx.clearRect(0,0,rect.width,rect.height);
+
+  const margin = {l: 48, r: 16, t: 24, b: 48};
+  const W = rect.width - margin.l - margin.r;
+  const H = rect.height - margin.t - margin.b;
+  ctx.save();
+  ctx.translate(margin.l, margin.t);
+
+  const view = document.getElementById('view').value;
+  const midx = parseInt(document.getElementById('measure').value || '0', 10) || 0;
+  const series = (gData.series || [])[midx] || {x:[], y:[], label:'series'};
+
+  if (view === 'timeseries' || view === 'yoy_diff') {
+    const xs = series.x;
+    let ys = series.y.map(Number);
+    if (view === 'yoy_diff') {
+      const diff = [];
+      for (let i=0; i<ys.length; i++) diff.push(i ? ys[i]-ys[i-1] : 0);
+      ys = diff;
+    }
+    if (xs.length === 0) { ctx.fillText('繝・・繧ｿ縺後≠繧翫∪縺帙ｓ', 10, 20); ctx.restore(); return; }
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const padY = (maxY - minY) * 0.1 || 1;
+    const y0 = minY - padY;
+    const y1 = maxY + padY;
+    const xScale = i => (i/(xs.length-1)) * W;
+    const yScale = v => H - ((v - y0)/(y1 - y0)) * H;
+    // Axes
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W,H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,H); ctx.stroke();
+    // Ticks (Y)
+    ctx.fillStyle = '#475569'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const ticks = 5;
+    for (let i=0;i<=ticks;i++){
+      const v = y0 + (i/ticks)*(y1-y0);
+      const y = yScale(v);
+      ctx.strokeStyle = '#e2e8f0'; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+      ctx.fillText(v.toFixed(0), -6, y);
+    }
+    // X labels
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = '#475569';
+    const step = Math.ceil(xs.length / 8);
+    for (let i=0;i<xs.length;i+=step){ ctx.fillText(String(xs[i]), xScale(i), H+8); }
+    // Line
+    ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i=0;i<ys.length;i++){ const x = xScale(i), y = yScale(ys[i]); if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);} ctx.stroke();
+    // Title
+    ctx.fillStyle = '#0f172a'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = 'bold 14px system-ui';
+    ctx.fillText(series.label + (view==='yoy_diff'?'・亥燕蟷ｴ豈泌ｷｮ蛻・ｼ・:''), 0, -6);
+  } else if (view === 'composition') {
+    const comp = gData.composition || {labels:[], share:[]};
+    const labels = comp.labels || [];
+    const share = (comp.share || []).map(Number);
+    if (labels.length === 0) { ctx.fillText('讒区・豈斐ョ繝ｼ繧ｿ縺後≠繧翫∪縺帙ｓ', 10, 20); ctx.restore(); return; }
+    // Bar chart
+    const barW = Math.max(8, Math.min(48, Math.floor(W / (labels.length*1.5))));
+    const gap = Math.max(8, Math.floor(barW * 0.25));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let i=0; i<labels.length; i++){
+      const x = i * (barW + gap);
+      const h = Math.round((share[i]) * H);
+      ctx.fillStyle = '#60a5fa'; ctx.fillRect(x, H - h, barW, h);
+      ctx.fillStyle = '#475569'; ctx.fillText(labels[i].slice(0,12), x + barW/2, H + 8);
+    }
+    ctx.fillStyle = '#0f172a'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = 'bold 14px system-ui';
+    ctx.fillText('讒区・豈費ｼ・ + (comp.year || '譛譁ｰ蟷ｴ') + '・・, 0, -6);
+  }
+  ctx.restore();
+}
+
+window.addEventListener('load', () => { loadSummary().catch(err => { document.getElementById('status').textContent = err.message; }); });
+  </script>
+</head>
+<body>
+  <header><strong id="title">InvestViz Dashboard (MVP)</strong></header>
+  <main>
+    <div id="controls">
+      <label>繝薙Η繝ｼ: 
+        <select id="view" onchange="draw()">
+          <option value="timeseries">譎らｳｻ蛻・/option>
+          <option value="yoy_diff">蜑榊ｹｴ豈泌ｷｮ蛻・/option>
+          <option value="composition">讒区・豈・/option>
+        </select>
+      </label>
+      <label>邉ｻ蛻・ 
+        <select id="measure" onchange="draw()"></select>
+      </label>
+    </div>
+    <canvas id="chart"></canvas>
+    <div class="meta" id="status">summary.json 繧定ｪｭ縺ｿ霎ｼ縺ｿ縲∝腰荳縺ｾ縺溘・隍・焚邉ｻ蛻励・繧ｰ繝ｩ繝輔ｒ陦ｨ遉ｺ縺励∪縺吶・/div>
+  </main>
+</body>
+</html>
+"""
+
+
+def write_index_html(build_dir: str) -> str:
+    os.makedirs(build_dir, exist_ok=True)
+    path = os.path.join(build_dir, "index.html")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(INDEX_HTML)
+    return path
+
+
+def serve_build_dir(build_dir: str, host: str = "127.0.0.1", port: int = 8000) -> None:
+    os.chdir(build_dir)
+    handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer((host, port), handler) as httpd:
+        print(f"Serving {build_dir} at http://{host}:{port}")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            pass
+

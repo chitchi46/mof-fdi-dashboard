@@ -1,0 +1,603 @@
+version: 0.1.0
+description: |
+  地域・国の正規化辞書
+  MOF投資統計に出現する地域名の表記ゆれを標準化
+
+regions:
+  # === 大陸・地域グループ ===
+  - canonical: "アジア"
+    canonical_en: "Asia"
+    iso_group: "AS"
+    aliases_ja:
+      - "アジア"
+      - "亜州"
+      - "アジア計"
+    aliases_en:
+      - "Asia"
+      - "Asia Total"
+    parent: null
+    level: "region"
+
+  - canonical: "北米"
+    canonical_en: "North America"
+    iso_group: "NA"
+    aliases_ja:
+      - "北米"
+      - "北アメリカ"
+      - "北米計"
+    aliases_en:
+      - "North America"
+      - "Northern America"
+    parent: null
+    level: "region"
+
+  - canonical: "中南米"
+    canonical_en: "Central and South America"
+    iso_group: "LAC"
+    aliases_ja:
+      - "中南米"
+      - "中南アメリカ"
+      - "中南米計"
+      - "ラテンアメリカ"
+    aliases_en:
+      - "Central and South America"
+      - "Latin America"
+      - "Central & South America"
+    parent: null
+    level: "region"
+
+  - canonical: "欧州"
+    canonical_en: "Europe"
+    iso_group: "EU"
+    aliases_ja:
+      - "欧州"
+      - "ヨーロッパ"
+      - "欧州計"
+    aliases_en:
+      - "Europe"
+    parent: null
+    level: "region"
+
+  - canonical: "オセアニア"
+    canonical_en: "Oceania"
+    iso_group: "OC"
+    aliases_ja:
+      - "オセアニア"
+      - "大洋州"
+      - "オセアニア計"
+    aliases_en:
+      - "Oceania"
+    parent: null
+    level: "region"
+
+  - canonical: "中東"
+    canonical_en: "Middle East"
+    iso_group: "ME"
+    aliases_ja:
+      - "中東"
+      - "中東計"
+    aliases_en:
+      - "Middle East"
+      - "Mideast"
+    parent: null
+    level: "region"
+
+  - canonical: "アフリカ"
+    canonical_en: "Africa"
+    iso_group: "AF"
+    aliases_ja:
+      - "アフリカ"
+      - "阿弗利加"
+      - "アフリカ計"
+    aliases_en:
+      - "Africa"
+    parent: null
+    level: "region"
+
+  # === アジア諸国 ===
+  - canonical: "中華人民共和国"
+    canonical_en: "P.R.China"
+    iso_code: "CN"
+    aliases_ja:
+      - "中国"
+      - "中華人民共和国"
+      - "支那"
+    aliases_en:
+      - "China"
+      - "P.R.China"
+      - "PR China"
+      - "PRC"
+    parent: "アジア"
+    level: "country"
+
+  - canonical: "香港"
+    canonical_en: "Hong Kong"
+    iso_code: "HK"
+    aliases_ja:
+      - "香港"
+      - "ホンコン"
+    aliases_en:
+      - "Hong Kong"
+      - "HK"
+      - "Hongkong"
+    parent: "アジア"
+    level: "country"
+
+  - canonical: "台湾"
+    canonical_en: "Taiwan"
+    iso_code: "TW"
+    aliases_ja:
+      - "台湾"
+      - "臺灣"
+    aliases_en:
+      - "Taiwan"
+    parent: "アジア"
+    level: "country"
+
+  - canonical: "韓国"
+    canonical_en: "R.Korea"
+    iso_code: "KR"
+    aliases_ja:
+      - "韓国"
+      - "大韓民国"
+      - "南朝鮮"
+    aliases_en:
+      - "Korea"
+      - "R.Korea"
+      - "South Korea"
+      - "Republic of Korea"
+    parent: "アジア"
+    level: "country"
+
+  - canonical: "シンガポール"
+    canonical_en: "Singapore"
+    iso_code: "SG"
+    aliases_ja:
+      - "シンガポール"
+      - "新嘉坡"
+    aliases_en:
+      - "Singapore"
+    parent: "アジア"
+    level: "country"
+
+  - canonical: "タイ"
+    canonical_en: "Thailand"
+    iso_code: "TH"
+    aliases_ja:
+      - "タイ"
+      - "泰国"
+    aliases_en:
+      - "Thailand"
+      - "Thai"
+    parent: "アジア"
+    level: "country"
+
+  - canonical: "インドネシア"
+    canonical_en: "Indonesia"
+    iso_code: "ID"
+    aliases_ja:
+      - "インドネシア"
+      - "尼"
+    aliases_en:
+      - "Indonesia"
+    parent: "アジア"
+    level: "country"
+
+  - canonical: "マレーシア"
+    canonical_en: "Malaysia"
+    iso_code: "MY"
+    aliases_ja:
+      - "マレーシア"
+      - "馬来西亜"
+    aliases_en:
+      - "Malaysia"
+    parent: "アジア"
+    level: "country"
+
+  - canonical: "フィリピン"
+    canonical_en: "Philippines"
+    iso_code: "PH"
+    aliases_ja:
+      - "フィリピン"
+      - "比律賓"
+    aliases_en:
+      - "Philippines"
+      - "Philippine"
+    parent: "アジア"
+    level: "country"
+
+  - canonical: "ベトナム"
+    canonical_en: "Viet Nam"
+    iso_code: "VN"
+    aliases_ja:
+      - "ベトナム"
+      - "越南"
+    aliases_en:
+      - "Vietnam"
+      - "Viet Nam"
+    parent: "アジア"
+    level: "country"
+
+  - canonical: "インド"
+    canonical_en: "India"
+    iso_code: "IN"
+    aliases_ja:
+      - "インド"
+      - "印度"
+    aliases_en:
+      - "India"
+    parent: "アジア"
+    level: "country"
+
+  # === 北米諸国 ===
+  - canonical: "アメリカ合衆国"
+    canonical_en: "U.S.A."
+    iso_code: "US"
+    aliases_ja:
+      - "アメリカ"
+      - "米国"
+      - "アメリカ合衆国"
+      - "米"
+    aliases_en:
+      - "USA"
+      - "U.S.A."
+      - "US"
+      - "United States"
+      - "United States of America"
+      - "America"
+    parent: "北米"
+    level: "country"
+
+  - canonical: "カナダ"
+    canonical_en: "Canada"
+    iso_code: "CA"
+    aliases_ja:
+      - "カナダ"
+      - "加奈陀"
+    aliases_en:
+      - "Canada"
+    parent: "北米"
+    level: "country"
+
+  # === 中南米諸国 ===
+  - canonical: "メキシコ"
+    canonical_en: "Mexico"
+    iso_code: "MX"
+    aliases_ja:
+      - "メキシコ"
+      - "墨西哥"
+    aliases_en:
+      - "Mexico"
+    parent: "中南米"
+    level: "country"
+
+  - canonical: "ブラジル"
+    canonical_en: "Brazil"
+    iso_code: "BR"
+    aliases_ja:
+      - "ブラジル"
+      - "伯剌西爾"
+    aliases_en:
+      - "Brazil"
+      - "Brasil"
+    parent: "中南米"
+    level: "country"
+
+  - canonical: "ケイマン諸島"
+    canonical_en: "Cayman Islands"
+    iso_code: "KY"
+    aliases_ja:
+      - "ケイマン諸島"
+      - "ケイマン"
+    aliases_en:
+      - "Cayman Islands"
+      - "Cayman"
+    parent: "中南米"
+    level: "country"
+
+  # === オセアニア諸国 ===
+  - canonical: "オーストラリア"
+    canonical_en: "Australia"
+    iso_code: "AU"
+    aliases_ja:
+      - "オーストラリア"
+      - "豪州"
+    aliases_en:
+      - "Australia"
+    parent: "オセアニア"
+    level: "country"
+
+  - canonical: "ニュージーランド"
+    canonical_en: "New Zealand"
+    iso_code: "NZ"
+    aliases_ja:
+      - "ニュージーランド"
+      - "新西蘭"
+    aliases_en:
+      - "New Zealand"
+      - "NZ"
+    parent: "オセアニア"
+    level: "country"
+
+  # === 欧州諸国 ===
+  - canonical: "ドイツ"
+    canonical_en: "Germany"
+    iso_code: "DE"
+    aliases_ja:
+      - "ドイツ"
+      - "独逸"
+      - "独"
+    aliases_en:
+      - "Germany"
+      - "Deutschland"
+    parent: "欧州"
+    level: "country"
+
+  - canonical: "英国"
+    canonical_en: "U.K."
+    iso_code: "GB"
+    aliases_ja:
+      - "英国"
+      - "イギリス"
+      - "英"
+    aliases_en:
+      - "UK"
+      - "U.K."
+      - "United Kingdom"
+      - "Britain"
+      - "Great Britain"
+    parent: "欧州"
+    level: "country"
+
+  - canonical: "フランス"
+    canonical_en: "France"
+    iso_code: "FR"
+    aliases_ja:
+      - "フランス"
+      - "仏蘭西"
+      - "仏"
+    aliases_en:
+      - "France"
+    parent: "欧州"
+    level: "country"
+
+  - canonical: "オランダ"
+    canonical_en: "Netherlands"
+    iso_code: "NL"
+    aliases_ja:
+      - "オランダ"
+      - "和蘭"
+      - "蘭"
+    aliases_en:
+      - "Netherlands"
+      - "Holland"
+    parent: "欧州"
+    level: "country"
+
+  - canonical: "イタリア"
+    canonical_en: "Italy"
+    iso_code: "IT"
+    aliases_ja:
+      - "イタリア"
+      - "伊太利亜"
+      - "伊"
+    aliases_en:
+      - "Italy"
+      - "Italia"
+    parent: "欧州"
+    level: "country"
+
+  - canonical: "ベルギー"
+    canonical_en: "Belgium"
+    iso_code: "BE"
+    aliases_ja:
+      - "ベルギー"
+      - "白耳義"
+    aliases_en:
+      - "Belgium"
+      - "Belgique"
+    parent: "欧州"
+    level: "country"
+
+  - canonical: "ルクセンブルク"
+    canonical_en: "Luxembourg"
+    iso_code: "LU"
+    aliases_ja:
+      - "ルクセンブルク"
+      - "盧森堡"
+    aliases_en:
+      - "Luxembourg"
+    parent: "欧州"
+    level: "country"
+
+  - canonical: "スイス"
+    canonical_en: "Switzerland"
+    iso_code: "CH"
+    aliases_ja:
+      - "スイス"
+      - "瑞西"
+    aliases_en:
+      - "Switzerland"
+      - "Swiss"
+    parent: "欧州"
+    level: "country"
+
+  - canonical: "スウェーデン"
+    canonical_en: "Sweden"
+    iso_code: "SE"
+    aliases_ja:
+      - "スウェーデン"
+      - "瑞典"
+    aliases_en:
+      - "Sweden"
+    parent: "欧州"
+    level: "country"
+
+  - canonical: "スペイン"
+    canonical_en: "Spain"
+    iso_code: "ES"
+    aliases_ja:
+      - "スペイン"
+      - "西班牙"
+    aliases_en:
+      - "Spain"
+      - "España"
+    parent: "欧州"
+    level: "country"
+
+  - canonical: "ロシア"
+    canonical_en: "Russia"
+    iso_code: "RU"
+    aliases_ja:
+      - "ロシア"
+      - "露西亜"
+      - "露"
+    aliases_en:
+      - "Russia"
+      - "Russian Federation"
+    parent: "欧州"
+    level: "country"
+
+  # === 中東諸国 ===
+  - canonical: "サウジアラビア"
+    canonical_en: "Saudi Arabia"
+    iso_code: "SA"
+    aliases_ja:
+      - "サウジアラビア"
+      - "サウジ"
+    aliases_en:
+      - "Saudi Arabia"
+      - "Saudi"
+    parent: "中東"
+    level: "country"
+
+  - canonical: "アラブ首長国連邦"
+    canonical_en: "U.A.E."
+    iso_code: "AE"
+    aliases_ja:
+      - "アラブ首長国連邦"
+      - "UAE"
+    aliases_en:
+      - "UAE"
+      - "U.A.E."
+      - "United Arab Emirates"
+    parent: "中東"
+    level: "country"
+
+  - canonical: "イラン"
+    canonical_en: "Iran"
+    iso_code: "IR"
+    aliases_ja:
+      - "イラン"
+      - "伊朗"
+    aliases_en:
+      - "Iran"
+    parent: "中東"
+    level: "country"
+
+  # === アフリカ諸国 ===
+  - canonical: "南アフリカ共和国"
+    canonical_en: "R.South Africa"
+    iso_code: "ZA"
+    aliases_ja:
+      - "南アフリカ"
+      - "南アフリカ共和国"
+      - "南ア"
+    aliases_en:
+      - "South Africa"
+      - "R.South Africa"
+      - "Republic of South Africa"
+    parent: "アフリカ"
+    level: "country"
+
+  # === 特別グループ ===
+  - canonical: "OECD諸国"
+    canonical_en: "OECD countries"
+    iso_group: "OECD"
+    aliases_ja:
+      - "OECD"
+      - "OECD諸国"
+      - "OECD加盟国"
+    aliases_en:
+      - "OECD"
+      - "OECD countries"
+    parent: null
+    level: "group"
+
+  - canonical: "ASEAN"
+    canonical_en: "ASEAN"
+    iso_group: "ASEAN"
+    aliases_ja:
+      - "ASEAN"
+      - "アセアン"
+      - "東南アジア諸国連合"
+    aliases_en:
+      - "ASEAN"
+    parent: "アジア"
+    level: "group"
+
+  - canonical: "EU"
+    canonical_en: "EU"
+    iso_group: "EU"
+    aliases_ja:
+      - "EU"
+      - "欧州連合"
+    aliases_en:
+      - "EU"
+      - "European Union"
+    parent: "欧州"
+    level: "group"
+
+  - canonical: "東欧・ロシア等"
+    canonical_en: "Eastern Europe, Russia, etc."
+    iso_group: "EEUR"
+    aliases_ja:
+      - "東欧・ロシア等"
+      - "東欧ロシア"
+    aliases_en:
+      - "Eastern Europe, Russia, etc."
+      - "Eastern Europe"
+    parent: "欧州"
+    level: "group"
+
+  - canonical: "国際機関"
+    canonical_en: "Int'l Organization"
+    iso_group: "INTL"
+    aliases_ja:
+      - "国際機関"
+      - "国際組織"
+    aliases_en:
+      - "Int'l Organization"
+      - "International Organization"
+      - "Intl Organization"
+    parent: null
+    level: "group"
+
+  - canonical: "不明・未分類"
+    canonical_en: "Unallocated"
+    iso_group: "UNALL"
+    aliases_ja:
+      - "不明"
+      - "未分類"
+      - "その他"
+    aliases_en:
+      - "Unallocated"
+      - "Unknown"
+      - "Other"
+      - "Others"
+    parent: null
+    level: "group"
+
+  - canonical: "合計"
+    canonical_en: "Total"
+    iso_group: "TOTAL"
+    aliases_ja:
+      - "合計"
+      - "総計"
+      - "計"
+    aliases_en:
+      - "Total"
+      - "Sum"
+    parent: null
+    level: "total"
+

@@ -1,0 +1,72 @@
+version: 0.1.0
+description: |
+  MOF InvestViz normalized tidy schema for investment statistics. Values are
+  normalized to 100 million yen (億円) scale where possible.
+
+columns:
+  - name: year
+    type: int
+    required: false
+    comment: Gregorian calendar year
+
+  - name: fiscal_year
+    type: int
+    required: false
+    comment: Fiscal year (optional)
+
+  - name: year_jp
+    type: string
+    required: false
+    comment: Japanese era display (e.g., 令和5年)
+
+  - name: side
+    type: enum
+    values: [assets, liabilities, unknown]
+    required: true
+
+  - name: metric
+    type: enum
+    values: [flow, reinvested, net, net_computed, unknown]
+    required: true
+
+  - name: measure
+    type: string
+    required: true
+    comment: Concatenated multi-level header (" / " separated)
+
+  - name: segment_region
+    type: string
+    required: false
+
+  - name: segment_industry
+    type: string
+    required: false
+
+  - name: segment_other
+    type: string
+    required: false
+
+  - name: value_100m_yen
+    type: number
+    required: true
+    comment: Values normalized to 100 million JPY (億円)
+
+  - name: qa_flag
+    type: string
+    required: false
+
+  - name: flag_outlier
+    type: boolean
+    required: false
+
+  - name: flag_break
+    type: boolean
+    required: false
+
+meta:
+  unit_original: string
+  scale_factor: number
+  rounding_policy: string
+  source_title: string
+  parse_log: json
+

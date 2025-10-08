@@ -1,0 +1,12 @@
+# MOF InvestViz Dependencies
+# Core data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# YAML parsing for dictionaries
+PyYAML>=6.0
+
+# Optional: Testing
+# pytest>=7.4.0
+# pytest-cov>=4.1.0
+
