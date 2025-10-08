@@ -320,7 +320,7 @@ def is_title_row(row: Sequence[str]) -> bool:
         return False
     
     # タイトルっぽいキーワード
-    title_keywords = ["財務省", "Balance of Payments", "統計", "Statistics", 
+    title_keywords = ["Balance of Payments", "統計", "Statistics", 
                      "Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ", "Ⅶ", "Ⅷ", "Ⅸ", "Ⅹ",
                      "（単位", "(単位", "Unit:", "(100 million"]
     return any(keyword in first_col for keyword in title_keywords)
