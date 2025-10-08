@@ -155,3 +155,15 @@ meta:
   - 現在ビューに基づく CSV エクスポート API/UI の実装
   - 描画品質改善（スケール調整・ラベル・ホバー・凡例・アニメーション）
 - **フェーズ3**: 大規模データ最適化（ダウンサンプリング/キャッシュ/Web Worker）、注釈テンプレート、自動テストと CI
+
+---
+
+## 優先タスク（未実装・優先度順）
+- P0: 国別ランキングの信頼性向上（国のみを対象、合計/地域/グループを除外）
+  - サマリ層で`level=='country'`のフィルタを徹底、ビューを分離
+  - `.plans/country-ranking-validity.md`
+- P0: アップロード・セッション一貫性（エクスポート含む）
+  - `/api/export` のセッション対応とUIからのSID連携
+  - `.plans/upload-session-fix.md`, `.plans/upload-flow-fix.md`
+- P1: 国別比較チャート（円/棒）の仕様FIXとデータ提供
+  - `.plans/country-comparison-charts.md`

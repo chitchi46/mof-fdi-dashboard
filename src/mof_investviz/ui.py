@@ -68,7 +68,8 @@ async function uploadAndAnalyze(file){
   }
   document.getElementById('controls').style.display = 'flex';
   document.getElementById('chartPanel').style.display = 'block';
-  document.getElementById('uploader').style.display = 'none';
+  // アップローダーは非表示にするが、ボタンで再表示可能
+  hideUploadPanel();
   document.getElementById('downloadNormalized').href = obj.links.normalized_csv;
   document.getElementById('downloadNormalized').style.pointerEvents = 'auto';
   document.getElementById('downloadParseLog').href = obj.links.parse_log;
@@ -77,8 +78,18 @@ async function uploadAndAnalyze(file){
     document.getElementById('downloadPivot').href = obj.links.pivot_csv;
     document.getElementById('downloadPivot').style.pointerEvents = 'auto';
   }
-  st.textContent = '';
+  st.textContent = '✓ アップロード完了';
+  setTimeout(() => { st.textContent = ''; }, 3000);
   draw();
+}
+
+function showUploadPanel() {
+  document.getElementById('uploader').style.display = 'block';
+  document.getElementById('chartPanel').style.display = gData ? 'block' : 'none';
+}
+
+function hideUploadPanel() {
+  document.getElementById('uploader').style.display = 'none';
 }
 
 function onSelectFile(){ const el=document.getElementById('file'); if(el.files && el.files[0]) uploadAndAnalyze(el.files[0]); }
@@ -294,8 +305,204 @@ function draw(){
     // Title
     ctx.fillStyle = '#e5e7eb'; ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.font='bold 14px system-ui';
     ctx.fillText('箱ひげ図（年次・系列分布）', 0, -8);
+  } else if (view === 'country_pie') {
+    // 円グラフ：国別構成比（最新年または選択年）
+    if (!gData.regions || !gData.regions.series || gData.regions.series.length === 0) {
+      ctx.fillText('国別データがありません', 10, 20); ctx.restore(); return;
+    }
+    const yearFilter = document.getElementById('yearFilter');
+    const selectedYear = yearFilter ? yearFilter.value : '';
+    const targetYear = selectedYear || (gData.years && gData.years[gData.years.length - 1]) || '2025';
+    
+    // 各国の値を収集
+    const countryData = [];
+    let total = 0;
+    for (const regionSeries of gData.regions.series) {
+      if (!regionSeries.x || !regionSeries.y) continue;
+      const idx = regionSeries.x.indexOf(String(targetYear));
+      if (idx >= 0) {
+        const val = Number(regionSeries.y[idx] || 0);
+        if (val > 0) {  // 正の値のみ
+          countryData.push({ label: regionSeries.label, value: val });
+          total += val;
+        }
+      }
+    }
+    
+    if (countryData.length === 0 || total === 0) {
+      ctx.fillText('選択年のデータがありません', 10, 20); ctx.restore(); return;
+    }
+    
+    // 値でソート（降順）
+    countryData.sort((a, b) => b.value - a.value);
+    
+    // トップNを取得
+    const topN = parseInt(document.getElementById('topN') ? document.getElementById('topN').value : '10', 10);
+    const displayData = countryData.slice(0, topN);
+    
+    // 円グラフを描画
+    const centerX = W / 2;
+    const centerY = H / 2;
+    const radius = Math.min(W, H) * 0.35;
+    
+    let startAngle = -Math.PI / 2;  // 12時の位置から開始
+    displayData.forEach((item, i) => {
+      const angle = (item.value / total) * 2 * Math.PI;
+      const endAngle = startAngle + angle;
+      
+      // 扇形を描画
+      ctx.fillStyle = gColors[i % gColors.length];
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+      ctx.closePath();
+      ctx.fill();
+      
+      // ラベル（中央角度に配置）
+      const midAngle = startAngle + angle / 2;
+      const labelX = centerX + Math.cos(midAngle) * radius * 0.7;
+      const labelY = centerY + Math.sin(midAngle) * radius * 0.7;
+      const percentage = ((item.value / total) * 100).toFixed(1);
+      
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 12px system-ui';
+      if (percentage > 5) {  // 5%以上の場合のみラベル表示
+        ctx.fillText(`${percentage}%`, labelX, labelY);
+      }
+      
+      startAngle = endAngle;
+    });
+    
+    // タイトル
+    ctx.fillStyle = '#e5e7eb'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = 'bold 14px system-ui';
+    ctx.fillText(`国別構成比（${targetYear}年・トップ${topN}）`, 0, -8);
+    
+    // 凡例を別途表示
+    const legend = document.getElementById('legend');
+    legend.innerHTML = '';
+    displayData.forEach((item, i) => {
+      const d = document.createElement('div');
+      d.className = 'item';
+      d.innerHTML = `<span class="swatch" style="background:${gColors[i % gColors.length]}"></span>${item.label}: ${item.value.toLocaleString()} (${((item.value / total) * 100).toFixed(1)}%)`;
+      legend.appendChild(d);
+    });
+  } else if (view === 'country_bar') {
+    // 棒グラフ：国別ランキング（任意年のトップN）
+    if (!gData.regions || !gData.regions.series || gData.regions.series.length === 0) {
+      ctx.fillText('国別データがありません', 10, 20); ctx.restore(); return;
+    }
+    const yearFilter = document.getElementById('yearFilter');
+    const selectedYear = yearFilter ? yearFilter.value : '';
+    const targetYear = selectedYear || (gData.years && gData.years[gData.years.length - 1]) || '2025';
+    
+    // 各国の値を収集
+    const countryData = [];
+    for (const regionSeries of gData.regions.series) {
+      if (!regionSeries.x || !regionSeries.y) continue;
+      const idx = regionSeries.x.indexOf(String(targetYear));
+      if (idx >= 0) {
+        const val = Number(regionSeries.y[idx] || 0);
+        if (val > 0) {  // 正の値のみ
+          countryData.push({ label: regionSeries.label, value: val });
+        }
+      }
+    }
+    
+    if (countryData.length === 0) {
+      ctx.fillText('選択年のデータがありません', 10, 20); ctx.restore(); return;
+    }
+    
+    // 値でソート（降順）
+    countryData.sort((a, b) => b.value - a.value);
+    
+    // トップNを取得
+    const topN = parseInt(document.getElementById('topN') ? document.getElementById('topN').value : '10', 10);
+    const displayData = countryData.slice(0, topN);
+    
+    // Y軸のスケール
+    const maxVal = Math.max(...displayData.map(d => d.value));
+    const yScale = v => H - (v / maxVal) * H * 0.9;
+    
+    // 横軸の設定
+    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(W, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, H); ctx.stroke();
+    
+    // Y軸の目盛り
+    ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const ticks = 5;
+    for (let i = 0; i <= ticks; i++) {
+      const v = (i / ticks) * maxVal;
+      const y = yScale(v);
+      ctx.strokeStyle = '#1f2937'; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      ctx.fillText(v.toFixed(0), -8, y);
+    }
+    
+    // 棒グラフを描画
+    const barW = Math.max(8, Math.min(48, Math.floor(W / (displayData.length * 1.5))));
+    const gap = Math.max(8, Math.floor(barW * 0.25));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    
+    displayData.forEach((item, i) => {
+      const x = i * (barW + gap);
+      const h = H - yScale(item.value);
+      ctx.fillStyle = gColors[i % gColors.length];
+      ctx.fillRect(x, H - h, barW, h);
+      
+      // 値を棒の上に表示
+      ctx.fillStyle = '#e5e7eb';
+      ctx.font = '10px system-ui';
+      ctx.fillText(item.value.toLocaleString(), x + barW / 2, H - h - 4);
+      
+      // 国名を棒の下に表示（回転）
+      ctx.save();
+      ctx.translate(x + barW / 2, H + 8);
+      ctx.rotate(-Math.PI / 4);
+      ctx.fillStyle = '#94a3b8';
+      ctx.textAlign = 'right';
+      ctx.fillText(item.label.slice(0, 15), 0, 0);
+      ctx.restore();
+    });
+    
+    // タイトル
+    ctx.fillStyle = '#e5e7eb'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = 'bold 14px system-ui';
+    ctx.fillText(`国別ランキング（${targetYear}年・トップ${topN}）`, 0, -8);
   }
   ctx.restore();
+}
+
+function onViewChange() {
+  const view = document.getElementById('view').value;
+  const isCountryView = view === 'country_pie' || view === 'country_bar';
+  
+  // 国別ビューの場合、年フィルタとトップN選択を表示
+  if (isCountryView) {
+    // 年フィルタの構築
+    if (gData && gData.years) {
+      const yf = document.getElementById('yearFilter');
+      yf.innerHTML = '';
+      gData.years.slice().reverse().forEach(y => {
+        const o = document.createElement('option');
+        o.value = y;
+        o.textContent = y;
+        yf.appendChild(o);
+      });
+      document.getElementById('yearFilterLabel').style.display = '';
+    }
+    document.getElementById('topNLabel').style.display = '';
+    document.getElementById('regionFilterLabel').style.display = 'none';  // 地域フィルタは非表示
+  } else {
+    document.getElementById('yearFilterLabel').style.display = 'none';
+    document.getElementById('topNLabel').style.display = 'none';
+    // 地域フィルタは時系列ビューで表示
+    if (gData && gData.regions && gData.regions.available && gData.regions.available.length > 0) {
+      document.getElementById('regionFilterLabel').style.display = (view === 'timeseries' || view === 'yoy_diff') ? '' : 'none';
+    }
+  }
+  
+  draw();
 }
 
 async function loadExistingSummary() {
@@ -323,8 +530,10 @@ async function loadExistingSummary() {
     
     document.getElementById('controls').style.display = 'flex';
     document.getElementById('chartPanel').style.display = 'block';
-    document.getElementById('uploader').style.display = 'none';
-    document.getElementById('uploadStatus').textContent = '✓ 既存データを読み込みました';
+    hideUploadPanel();
+    const st = document.getElementById('uploadStatus');
+    st.textContent = '✓ 既存データを読み込みました';
+    setTimeout(() => { st.textContent = ''; }, 3000);
     draw();
     return true;
   } catch (e) {
@@ -348,12 +557,13 @@ window.addEventListener('load', () => {
     <div class="title" id="title">InvestViz Dashboard (MVP)</div>
     <div class="actions">
       <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="overlay"> 全系列を重ね描画</label>
+      <button class="btn" id="uploadNewBtn" onclick="showUploadPanel()" title="新しいCSVファイルをアップロード">📤 新規CSV</button>
     </div>
   </header>
   <main>
     <div id="uploader" class="panel">
       <div class="drop" id="drop">ここに CSV をドラッグ＆ドロップするか、ファイルを選択してください。</div>
-      <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+      <div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input type="file" id="file" accept=".csv" onchange="onSelectFile()" />
         <a id="downloadNormalized" href="#" class="meta" style="text-decoration:none; pointer-events:none;">normalized.csv</a>
         <a id="downloadParseLog" href="#" class="meta" style="text-decoration:none; pointer-events:none;">parse_log.json</a>
@@ -365,12 +575,14 @@ window.addEventListener('load', () => {
     <div class="panel" id="chartPanel">
       <div id="controls">
         <label>ビュー: 
-          <select id="view" onchange="draw()">
+          <select id="view" onchange="onViewChange()">
             <option value="timeseries">時系列</option>
             <option value="yoy_diff">前年比差分</option>
             <option value="composition">構成比</option>
             <option value="heatmap">ヒートマップ</option>
             <option value="boxplot">箱ひげ図</option>
+            <option value="country_pie">国別構成比（円）</option>
+            <option value="country_bar">国別ランキング（棒）</option>
           </select>
         </label>
         <label>系列: 
@@ -378,6 +590,17 @@ window.addEventListener('load', () => {
         </label>
         <label id="regionFilterLabel" style="display:none;">地域: 
           <select id="regionFilter" onchange="draw()"></select>
+        </label>
+        <label id="yearFilterLabel" style="display:none;">年: 
+          <select id="yearFilter" onchange="draw()"></select>
+        </label>
+        <label id="topNLabel" style="display:none;">表示数: 
+          <select id="topN" onchange="draw()">
+            <option value="5">トップ5</option>
+            <option value="10" selected>トップ10</option>
+            <option value="15">トップ15</option>
+            <option value="20">トップ20</option>
+          </select>
         </label>
         <button class="btn" id="exportBtn" onclick="exportCurrentView()" title="現在のビュー（フィルタ適用済み）をCSVでダウンロード">📥 CSVエクスポート</button>
       </div>
