@@ -267,6 +267,39 @@ def get_region_level(region_name: str) -> Optional[str]:
     return None
 
 
+def get_region_canonical(region_name: str) -> Optional[str]:
+    """地域名から canonical（正規化名）を取得
+    
+    Args:
+        region_name: 地域名（別名含む）
+    
+    Returns:
+        canonical名、見つからない場合は元の名前
+    """
+    if not region_name:
+        return region_name
+    
+    regions = load_region_dictionary()
+    
+    # まずcanonicalとして一致するか確認
+    for region in regions:
+        canonical = region.get("canonical", "")
+        if canonical == region_name:
+            return canonical
+    
+    # 別名（aliases）から検索
+    for region in regions:
+        canonical = region.get("canonical", "")
+        aliases_ja = region.get("aliases_ja", [])
+        aliases_en = region.get("aliases_en", [])
+        
+        if region_name in aliases_ja or region_name in aliases_en:
+            return canonical
+    
+    # 見つからない場合は元の名前を返す
+    return region_name
+
+
 # -------------------- Unit / side / metric detection --------------------
 
 UNIT_SCALES = [
@@ -600,16 +633,17 @@ def build_summary_multi_measure(norm_rows: List[Dict[str, object]], top_n: int =
         if yk:
             years_set.add(yk)
         
-        # 地域別集計
+        # 地域別集計（canonical名に正規化）
         if region:
-            regions_set.add(region)
-            region_agg[region][yk] += v
+            canonical = get_region_canonical(region)
+            regions_set.add(canonical)
+            region_agg[canonical][yk] += v
             
             # 国レベルのみを分離して集計
-            level = get_region_level(region)
+            level = get_region_level(canonical)
             if level == "country":
-                countries_set.add(region)
-                country_agg[region][yk] += v
+                countries_set.add(canonical)
+                country_agg[canonical][yk] += v
     
     years = sorted(years_set)
     totals = [(m, sum(d.values())) for m, d in agg.items()]

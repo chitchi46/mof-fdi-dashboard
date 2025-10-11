@@ -124,3 +124,20 @@ python3 scripts/serve_dashboard.py --build-dir build --host 0.0.0.0 --port 8000
 - ビューごとの CSV エクスポート（現在のフィルタを反映）
 - 描画品質改善（軸/配色/ツールチップ/凡例、高 DPI 対応）
 - ダッシュボード多系列・指標切替、差分/構成比ビューの追加
+
+---
+
+## 6. 再起動（WSL/bash・手動）
+
+開発中に素早く再起動したい場合は、WSL の bash で次を実行します（PowerShell は使用しません）。
+
+```
+cd /home/uka_agai/mof_investviz
+bash scripts/wsl_restart_backend.sh 8002   # 8000にしたい場合は 8000 に変更
+```
+
+起動後は `http://127.0.0.1:<PORT>/` を開いてください。停止は `fuser -k -n tcp <PORT>`。
+
+### 注意（重要）
+- 本プロジェクトの起動・再起動・停止は、WSL(Ubuntu) の bash 前提です。
+- どのような状況でも PowerShell 経由の実行は行わないでください。

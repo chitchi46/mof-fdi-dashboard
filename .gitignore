@@ -94,3 +94,5 @@ id_ed25519*
 # Data caches
 data/.cache/
 
+.server_*.log
+.server_*.pid

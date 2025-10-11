@@ -29,21 +29,69 @@ INDEX_HTML = """<!doctype html>
     .btn:disabled { background:#475569; cursor:not-allowed; }
     main { padding: 16px; }
     .panel { background:var(--panel); border-radius:8px; padding:12px; border:1px solid #1f2937; }
-    #controls { display:none; flex-wrap:wrap; gap:12px; margin-bottom:12px; align-items:center; }
+    #controls { display:none; flex-direction:column; gap:8px; margin-bottom:12px; }
+    .control-row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:8px; border-radius:6px; }
+    .control-row.common { background:rgba(96,165,250,0.05); border:1px solid rgba(96,165,250,0.2); }
+    .control-row.specific { background:rgba(148,163,184,0.05); border:1px solid rgba(148,163,184,0.2); }
     select, button, input[type=checkbox] { background:#0f172a; color:#e5e7eb; border:1px solid #334155; border-radius:6px; padding:6px 8px; }
     #chartPanel { display:none; }
     #chart { width:100%; height:420px; border:1px solid #334155; border-radius:8px; background:#0b1220; }
+    .multi-panel-grid { display:grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap:12px; width:100%; height:860px; }
+    .panel-item { border:1px solid #334155; border-radius:8px; background:#0b1220; position:relative; }
+    .panel-item canvas { width:100%; height:100%; }
+    .panel-title { position:absolute; top:8px; left:12px; font-size:13px; font-weight:bold; color:#94a3b8; pointer-events:none; }
     .meta { color: var(--muted); font-size: 12px; margin-top: 8px; }
     .legend { display:flex; flex-wrap:wrap; gap:12px; margin:8px 0; }
     .legend .item { display:flex; align-items:center; gap:6px; color: var(--muted); }
     .swatch { display:inline-block; width:12px; height:12px; border-radius:2px; }
     .drop { border:1px dashed #334155; border-radius:8px; padding:18px; text-align:center; color:var(--muted); }
+    .toast { position:fixed; top:20px; right:20px; background:#0f172a; color:#e5e7eb; padding:12px 20px; border-radius:8px; border:1px solid #334155; box-shadow:0 4px 12px rgba(0,0,0,0.5); z-index:1000; display:none; }
+    .toast.show { display:block; animation:slideIn 0.3s ease-out; }
+    @keyframes slideIn { from {transform:translateX(400px); opacity:0;} to {transform:translateX(0); opacity:1;} }
   </style>
   <script>
 let gData = null;
-let gColors = ['#60a5fa','#f472b6','#f59e0b','#34d399','#a78bfa','#f43f5e','#22d3ee'];
+// Okabe-Ito 色弱対応パレット（8色）+ 補完色
+let gColors = [
+  '#0173B2',  // blue
+  '#DE8F05',  // orange
+  '#029E73',  // green
+  '#CC78BC',  // purple
+  '#CA9161',  // tan
+  '#949494',  // gray
+  '#ECE133',  // yellow
+  '#56B4E9',  // sky blue
+  '#D55E00',  // vermillion
+  '#F0E442'   // light yellow
+];
 let gOverlay = false;
 let gSessionId = null;  // 現在のセッションID
+let gPinnedPoint = null;  // ピン留めされた点 {x, y, idx}
+
+// 文字列から一貫した色を生成（ハッシュベース）
+function stringToColor(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return gColors[Math.abs(hash) % gColors.length];
+}
+
+// TopNスライダの値を更新
+function updateTopNLabel() {
+  const val = document.getElementById('topN').value;
+  document.getElementById('topNValue').textContent = val;
+}
+
+// トースト表示
+function showToast(message, duration = 3000) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, duration);
+}
 
 async function uploadAndAnalyze(file){
   const st = document.getElementById('uploadStatus');
@@ -102,8 +150,197 @@ function hideUploadPanel() {
 
 function onSelectFile(){ const el=document.getElementById('file'); if(el.files && el.files[0]) uploadAndAnalyze(el.files[0]); }
 
+// マルチパネル描画関数
+function drawMultiPanel() {
+  const midx = parseInt(document.getElementById('measure').value || '0', 10) || 0;
+  const series = (gData.series || [])[midx] || {x:[], y:[], label:'series'};
+  
+  // パネル1: 時系列推移
+  drawPanelChart('chart1', series, 'timeseries');
+  // パネル2: 前年比差分
+  drawPanelChart('chart2', series, 'yoy_diff');
+  // パネル3: 国別ランキング (Top 5)
+  drawPanelCountryRanking('chart3');
+  // パネル4: 構成比
+  drawPanelComposition('chart4');
+}
+
+// パネル用チャート描画（時系列/YoY）
+function drawPanelChart(canvasId, series, mode) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * devicePixelRatio;
+  canvas.height = rect.height * devicePixelRatio;
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  ctx.clearRect(0,0,rect.width,rect.height);
+
+  const margin = {l: 50, r: 15, t: 35, b: 50};
+  const W = rect.width - margin.l - margin.r;
+  const H = rect.height - margin.t - margin.b;
+  ctx.save();
+  ctx.translate(margin.l, margin.t);
+
+  let xs = series.x.slice();
+  let ys = series.y.map(Number);
+  if (mode === 'yoy_diff') {
+    const diff = [];
+    for (let i=0; i<ys.length; i++) diff.push(i ? ys[i]-ys[i-1] : 0);
+    ys = diff;
+  }
+  
+  if (xs.length === 0) { ctx.fillStyle = '#94a3b8'; ctx.fillText('データなし', 10, 20); ctx.restore(); return; }
+  
+  let minY = Math.min(...ys);
+  let maxY = Math.max(...ys);
+  const padY = (maxY - minY) * 0.1 || 1;
+  const y0 = minY - padY;
+  const y1 = maxY + padY;
+  const xScale = i => (i/(xs.length-1)) * W;
+  const yScale = v => H - ((v - y0)/(y1 - y0)) * H;
+  
+  // Axes
+  ctx.strokeStyle = '#334155'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W,H); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,H); ctx.stroke();
+  
+  // Ticks
+  ctx.fillStyle = '#cbd5e1'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = '10px system-ui';
+  const ticks = 4;
+  for (let i=0;i<=ticks;i++){
+    const v = y0 + (i/ticks)*(y1-y0);
+    const y = yScale(v);
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    ctx.fillText(v.toFixed(0), -5, y);
+  }
+  
+  // X labels (省略版)
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = '#cbd5e1'; ctx.font = '9px system-ui';
+  const step = Math.ceil(xs.length / 4);
+  for (let i=0;i<xs.length;i+=step){ ctx.fillText(String(xs[i]), xScale(i), H+8); }
+  
+  // Line
+  ctx.strokeStyle = gColors[0]; ctx.lineWidth = 2; ctx.beginPath();
+  for (let i=0;i<ys.length;i++){ const x = xScale(i), y = yScale(ys[i]); if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);} ctx.stroke();
+  
+  ctx.restore();
+}
+
+// パネル用国別ランキング
+function drawPanelCountryRanking(canvasId) {
+  if (!gData || !gData.countries || !gData.countries.series) return;
+  
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * devicePixelRatio;
+  canvas.height = rect.height * devicePixelRatio;
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  ctx.clearRect(0,0,rect.width,rect.height);
+
+  const margin = {l: 80, r: 15, t: 35, b: 40};
+  const W = rect.width - margin.l - margin.r;
+  const H = rect.height - margin.t - margin.b;
+  ctx.save();
+  ctx.translate(margin.l, margin.t);
+
+  // 最新年のデータでトップ5を取得
+  const latestYear = gData.years ? gData.years[gData.years.length - 1] : null;
+  if (!latestYear) { ctx.fillStyle = '#94a3b8'; ctx.fillText('データなし', 10, 20); ctx.restore(); return; }
+  
+  let countryData = [];
+  gData.countries.series.forEach(s => {
+    const yearIdx = s.x.indexOf(latestYear);
+    if (yearIdx >= 0) {
+      const value = Number(s.y[yearIdx]) || 0;
+      if (value > 0) countryData.push({label: s.label, value});
+    }
+  });
+  
+  countryData.sort((a, b) => b.value - a.value);
+  const top5 = countryData.slice(0, 5);
+  
+  if (top5.length === 0) { ctx.fillStyle = '#94a3b8'; ctx.fillText('データなし', 10, 20); ctx.restore(); return; }
+  
+  const maxVal = Math.max(...top5.map(d => d.value));
+  const barHeight = Math.max(15, Math.floor(H / (top5.length * 1.5)));
+  const gap = Math.max(5, Math.floor(barHeight * 0.3));
+  
+  // Bars
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = '10px system-ui';
+  top5.forEach((d, i) => {
+    const barW = (d.value / maxVal) * W * 0.9;
+    const y = i * (barHeight + gap);
+    const color = stringToColor(d.label);
+    ctx.fillStyle = color;
+    ctx.fillRect(0, y, barW, barHeight);
+    // Label
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillText(d.label, -5, y + barHeight/2);
+    // Value
+    ctx.fillStyle = '#cbd5e1'; ctx.textAlign = 'left';
+    ctx.fillText(d.value.toLocaleString(), barW + 5, y + barHeight/2);
+    ctx.textAlign = 'right';
+  });
+  
+  ctx.restore();
+}
+
+// パネル用構成比
+function drawPanelComposition(canvasId) {
+  const comp = gData.composition || {labels:[], share:[]};
+  const labels = comp.labels || [];
+  const share = (comp.share || []).map(Number);
+  
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * devicePixelRatio;
+  canvas.height = rect.height * devicePixelRatio;
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  ctx.clearRect(0,0,rect.width,rect.height);
+
+  const margin = {l: 15, r: 15, t: 35, b: 15};
+  const W = rect.width - margin.l - margin.r;
+  const H = rect.height - margin.t - margin.b;
+  ctx.save();
+  ctx.translate(margin.l, margin.t);
+  
+  if (labels.length === 0) { ctx.fillStyle = '#94a3b8'; ctx.fillText('データなし', 10, 20); ctx.restore(); return; }
+  
+  // Bar chart (横向き)
+  const barW = Math.max(8, Math.min(30, Math.floor(W / (labels.length*1.2))));
+  const gap = Math.max(6, Math.floor(barW * 0.2));
+  const maxShare = Math.max(...share);
+  
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = '9px system-ui';
+  for (let i=0; i<labels.length; i++){
+    const barH = (share[i] / maxShare) * H * 0.85;
+    const x = i * (barW + gap);
+    const y = H - barH;
+    ctx.fillStyle = gColors[i % gColors.length];
+    ctx.fillRect(x, y, barW, barH);
+    // Label (縦書き省略)
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText(labels[i].substring(0, 5), x + barW/2, H + 5);
+  }
+  
+  ctx.restore();
+}
+
 function draw(){
   if (!gData) return;
+  const view = document.getElementById('view').value;
+  
+  // マルチパネルモードの場合
+  if (view === 'multi_panel') {
+    drawMultiPanel();
+    return;
+  }
+  
   const canvas = document.getElementById('chart');
   const ctx = canvas.getContext('2d');
   const rect = canvas.getBoundingClientRect();
@@ -112,13 +349,11 @@ function draw(){
   ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
   ctx.clearRect(0,0,rect.width,rect.height);
 
-  const margin = {l: 56, r: 16, t: 30, b: 56};
+  const margin = {l: 60, r: 20, t: 30, b: 65};
   const W = rect.width - margin.l - margin.r;
   const H = rect.height - margin.t - margin.b;
   ctx.save();
   ctx.translate(margin.l, margin.t);
-
-  const view = document.getElementById('view').value;
   const selectedRegion = document.getElementById('regionFilter') ? document.getElementById('regionFilter').value : '';
   
   // 地域フィルタが選択されている場合は地域データを使用
@@ -148,53 +383,117 @@ function draw(){
     const xScale = i => (i/(xs.length-1)) * W;
     const yScale = v => H - ((v - y0)/(y1 - y0)) * H;
     // Axes + grid
-    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 1;
+    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W,H); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,H); ctx.stroke();
     // Ticks (Y)
-    ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#cbd5e1'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = '12px system-ui';
     const ticks = 5;
     for (let i=0;i<=ticks;i++){
       const v = y0 + (i/ticks)*(y1-y0);
       const y = yScale(v);
-      ctx.strokeStyle = '#1f2937'; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
       ctx.fillText(v.toFixed(0), -8, y);
     }
+    // Y軸ラベル
+    ctx.save();
+    ctx.translate(-45, H/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillStyle = '#e2e8f0'; ctx.textAlign = 'center'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('億円', 0, 0);
+    ctx.restore();
     // X labels
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = '#cbd5e1'; ctx.font = '12px system-ui';
     const step = Math.ceil(xs.length / 8);
     for (let i=0;i<xs.length;i+=step){ ctx.fillText(String(xs[i]), xScale(i), H+10); }
+    // X軸ラベル
+    ctx.fillStyle = '#e2e8f0'; ctx.textAlign = 'center'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('年度', W/2, H+35);
     // Lines
     function drawLine(lineXs, lineYs, color){
-      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+      ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.beginPath();
       for (let i=0;i<lineYs.length;i++){ const x = xScale(i), y = yScale(lineYs[i]); if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);} ctx.stroke();
+    }
+    function drawTrendLine(ys, color) {
+      // 移動平均（3点）
+      if (ys.length < 3) return;
+      const smoothed = [];
+      for (let i=0; i<ys.length; i++) {
+        if (i === 0) smoothed.push(ys[i]);
+        else if (i === ys.length - 1) smoothed.push(ys[i]);
+        else smoothed.push((ys[i-1] + ys[i] + ys[i+1]) / 3);
+      }
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([5, 5]); ctx.beginPath();
+      for (let i=0;i<smoothed.length;i++){ const x = xScale(i), y = yScale(smoothed[i]); if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);} ctx.stroke();
+      ctx.setLineDash([]);
     }
     if (gOverlay) {
       (gData.series||[]).forEach((s,i)=>{ drawLine(s.x, s.y.map(Number), gColors[i%gColors.length]); });
     } else {
       drawLine(xs, ys, gColors[0]);
+      // トレンドライン
+      if (document.getElementById('showTrend') && document.getElementById('showTrend').checked) {
+        drawTrendLine(ys, '#f59e0b');
+      }
     }
     // Title
     ctx.fillStyle = '#e5e7eb'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = 'bold 14px system-ui';
     const ttl = gOverlay ? '上位系列（重ね描画）' : (series.label + (view==='yoy_diff'?'（前年比差分）':''));
     ctx.fillText(ttl, 0, -8);
-    // Hover tooltips
+    // Crosshair & tooltips
     const tip = document.getElementById('status');
+    let hoverIdx = -1;
     canvas.onmousemove = (ev)=>{
       const rect2 = canvas.getBoundingClientRect();
       const mx = (ev.clientX - rect2.left) - margin.l;
       const my = (ev.clientY - rect2.top) - margin.t;
-      if (mx<0 || mx>W || my<0 || my>H) { tip.textContent = ''; return; }
+      if (mx<0 || mx>W || my<0 || my>H) { tip.textContent = ''; hoverIdx = -1; draw(); return; }
       const idx = Math.round((mx/W) * (xs.length-1));
+      hoverIdx = idx;
       let txt = '';
       if (gOverlay){
         const parts = (gData.series||[]).map((s,i)=>`${s.label}: ${Number(s.y[idx]||0).toLocaleString()}`);
         txt = `${xs[idx]} — ${parts.join(' / ')}`;
       } else {
-        txt = `${xs[idx]} — ${Number(ys[idx]||0).toLocaleString()} (${series.label})`;
+        const val = Number(ys[idx]||0);
+        const prevVal = idx > 0 ? Number(ys[idx-1]||0) : null;
+        let yoyStr = '';
+        if (prevVal !== null && prevVal !== 0) {
+          const yoyPct = ((val - prevVal) / prevVal * 100).toFixed(1);
+          yoyStr = ` (YoY: ${yoyPct > 0 ? '+' : ''}${yoyPct}%)`;
+        }
+        txt = `${xs[idx]} — ${val.toLocaleString()} ${yoyStr} (${series.label})`;
       }
       tip.textContent = txt;
+      // Redraw with crosshair
+      draw();
     };
+    canvas.onclick = (ev)=>{
+      const rect2 = canvas.getBoundingClientRect();
+      const mx = (ev.clientX - rect2.left) - margin.l;
+      const my = (ev.clientY - rect2.top) - margin.t;
+      if (mx<0 || mx>W || my<0 || my>H) { gPinnedPoint = null; draw(); return; }
+      const idx = Math.round((mx/W) * (xs.length-1));
+      gPinnedPoint = {idx, x: xScale(idx), y: yScale(ys[idx])};
+      draw();
+    };
+    // Draw crosshair & pinned point
+    if (hoverIdx >= 0 && !gPinnedPoint) {
+      const hx = xScale(hoverIdx);
+      const hy = yScale(ys[hoverIdx]);
+      ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(hx, 0); ctx.lineTo(hx, H); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, hy); ctx.lineTo(W, hy); ctx.stroke();
+      ctx.setLineDash([]);
+      // Dot
+      ctx.fillStyle = gColors[0]; ctx.beginPath(); ctx.arc(hx, hy, 5, 0, Math.PI*2); ctx.fill();
+    }
+    if (gPinnedPoint) {
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(gPinnedPoint.x, 0); ctx.lineTo(gPinnedPoint.x, H); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, gPinnedPoint.y); ctx.lineTo(W, gPinnedPoint.y); ctx.stroke();
+      ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(gPinnedPoint.x, gPinnedPoint.y, 6, 0, Math.PI*2); ctx.fill();
+    }
   } else if (view === 'composition') {
     const comp = gData.composition || {labels:[], share:[]};
     const labels = comp.labels || [];
@@ -346,7 +645,18 @@ function draw(){
     
     // トップNを取得
     const topN = parseInt(document.getElementById('topN') ? document.getElementById('topN').value : '10', 10);
-    const displayData = countryData.slice(0, topN);
+    const showOthers = document.getElementById('showOthers') ? document.getElementById('showOthers').checked : false;
+    
+    let displayData = countryData.slice(0, topN);
+    
+    // 「その他」を集約（円グラフ用）
+    if (showOthers && countryData.length > topN) {
+      const othersValue = countryData.slice(topN).reduce((sum, item) => sum + item.value, 0);
+      if (othersValue > 0) {
+        displayData.push({ label: 'その他', value: othersValue });
+        total += othersValue;  // 合計に追加
+      }
+    }
     
     // 円グラフを描画
     const centerX = W / 2;
@@ -358,8 +668,8 @@ function draw(){
       const angle = (item.value / total) * 2 * Math.PI;
       const endAngle = startAngle + angle;
       
-      // 扇形を描画
-      ctx.fillStyle = gColors[i % gColors.length];
+      // 扇形を描画（国名ハッシュで一貫した色）
+      ctx.fillStyle = stringToColor(item.label);
       ctx.beginPath();
       ctx.moveTo(centerX, centerY);
       ctx.arc(centerX, centerY, radius, startAngle, endAngle);
@@ -387,13 +697,46 @@ function draw(){
     ctx.fillStyle = '#e5e7eb'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = 'bold 14px system-ui';
     ctx.fillText(`国別構成比（${targetYear}年・トップ${topN}）`, 0, -8);
     
-    // 凡例を別途表示
+    // ホバー時のツールチップ処理
+    const tip = document.getElementById('status');
+    canvas.onmousemove = (ev) => {
+      const rect2 = canvas.getBoundingClientRect();
+      const mx = (ev.clientX - rect2.left) - margin.l;
+      const my = (ev.clientY - rect2.top) - margin.t;
+      
+      // 円の中心からの距離と角度を計算
+      const dx = mx - centerX;
+      const dy = my - centerY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist <= radius) {
+        let angle = Math.atan2(dy, dx) + Math.PI / 2;  // 12時の位置を0とする
+        if (angle < 0) angle += 2 * Math.PI;
+        
+        // どの扇形にホバーしているかを判定
+        let cumAngle = 0;
+        for (let i = 0; i < displayData.length; i++) {
+          const segAngle = (displayData[i].value / total) * 2 * Math.PI;
+          if (angle >= cumAngle && angle < cumAngle + segAngle) {
+            const pct = ((displayData[i].value / total) * 100).toFixed(1);
+            tip.textContent = `${displayData[i].label}: ${displayData[i].value.toLocaleString()} 億円 (${pct}%)`;
+            return;
+          }
+          cumAngle += segAngle;
+        }
+      }
+      tip.textContent = '';
+    };
+    
+    // 凡例を別途表示（国名ハッシュで一貫した色）
     const legend = document.getElementById('legend');
     legend.innerHTML = '';
+    legend.style.maxHeight = '200px';
+    legend.style.overflowY = 'auto';
     displayData.forEach((item, i) => {
       const d = document.createElement('div');
       d.className = 'item';
-      d.innerHTML = `<span class="swatch" style="background:${gColors[i % gColors.length]}"></span>${item.label}: ${item.value.toLocaleString()} (${((item.value / total) * 100).toFixed(1)}%)`;
+      d.innerHTML = `<span class="swatch" style="background:${stringToColor(item.label)}"></span>${item.label}: ${item.value.toLocaleString()} (${((item.value / total) * 100).toFixed(1)}%)`;
       legend.appendChild(d);
     });
   } else if (view === 'country_bar') {
@@ -422,16 +765,42 @@ function draw(){
       ctx.fillText('選択年のデータがありません', 10, 20); ctx.restore(); return;
     }
     
-    // 値でソート（降順）
-    countryData.sort((a, b) => b.value - a.value);
+    // ソート処理
+    const sortBy = document.getElementById('sortBy') ? document.getElementById('sortBy').value : 'value';
+    if (sortBy === 'value') {
+      countryData.sort((a, b) => b.value - a.value);  // 値（降順）
+    } else if (sortBy === 'value_asc') {
+      countryData.sort((a, b) => a.value - b.value);  // 値（昇順）
+    } else if (sortBy === 'name') {
+      countryData.sort((a, b) => a.label.localeCompare(b.label));  // 国名（昇順）
+    } else if (sortBy === 'name_desc') {
+      countryData.sort((a, b) => b.label.localeCompare(a.label));  // 国名（降順）
+    }
     
     // トップNを取得
     const topN = parseInt(document.getElementById('topN') ? document.getElementById('topN').value : '10', 10);
     const displayData = countryData.slice(0, topN);
     
+    // スケールタイプ（リニア or ログ）
+    const scaleType = document.getElementById('scaleType') ? document.getElementById('scaleType').value : 'linear';
+    
     // Y軸のスケール
     const maxVal = Math.max(...displayData.map(d => d.value));
-    const yScale = v => H - (v / maxVal) * H * 0.9;
+    const minVal = Math.min(...displayData.map(d => d.value).filter(v => v > 0));
+    
+    let yScale;
+    if (scaleType === 'log') {
+      // ログスケール
+      const logMax = Math.log10(maxVal || 1);
+      const logMin = Math.log10(minVal || 0.1);
+      yScale = v => {
+        if (v <= 0) return H;
+        return H - ((Math.log10(v) - logMin) / (logMax - logMin)) * H * 0.9;
+      };
+    } else {
+      // リニアスケール
+      yScale = v => H - (v / maxVal) * H * 0.9;
+    }
     
     // 横軸の設定
     ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 1;
@@ -441,11 +810,25 @@ function draw(){
     // Y軸の目盛り
     ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     const ticks = 5;
-    for (let i = 0; i <= ticks; i++) {
-      const v = (i / ticks) * maxVal;
-      const y = yScale(v);
-      ctx.strokeStyle = '#1f2937'; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-      ctx.fillText(v.toFixed(0), -8, y);
+    if (scaleType === 'log') {
+      // ログスケールの目盛り
+      const logMax = Math.log10(maxVal || 1);
+      const logMin = Math.log10(minVal || 0.1);
+      for (let i = 0; i <= ticks; i++) {
+        const logVal = logMin + (i / ticks) * (logMax - logMin);
+        const v = Math.pow(10, logVal);
+        const y = yScale(v);
+        ctx.strokeStyle = '#1f2937'; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+        ctx.fillText(v < 100 ? v.toFixed(1) : v.toFixed(0), -8, y);
+      }
+    } else {
+      // リニアスケールの目盛り
+      for (let i = 0; i <= ticks; i++) {
+        const v = (i / ticks) * maxVal;
+        const y = yScale(v);
+        ctx.strokeStyle = '#1f2937'; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+        ctx.fillText(v.toFixed(0), -8, y);
+      }
     }
     
     // 棒グラフを描画
@@ -453,10 +836,11 @@ function draw(){
     const gap = Math.max(8, Math.floor(barW * 0.25));
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     
+    const barCenters = [];
     displayData.forEach((item, i) => {
       const x = i * (barW + gap);
       const h = H - yScale(item.value);
-      ctx.fillStyle = gColors[i % gColors.length];
+      ctx.fillStyle = stringToColor(item.label);
       ctx.fillRect(x, H - h, barW, h);
       
       // 値を棒の上に表示
@@ -472,7 +856,30 @@ function draw(){
       ctx.textAlign = 'right';
       ctx.fillText(item.label.slice(0, 15), 0, 0);
       ctx.restore();
+      
+      // トレンドライン用の座標を保存
+      barCenters.push({x: x + barW / 2, y: H - h});
     });
+    
+    // トレンドライン（移動平均）
+    if (document.getElementById('showTrend') && document.getElementById('showTrend').checked && barCenters.length >= 3) {
+      const smoothed = [];
+      for (let i=0; i<barCenters.length; i++) {
+        if (i === 0) smoothed.push(barCenters[i]);
+        else if (i === barCenters.length - 1) smoothed.push(barCenters[i]);
+        else {
+          const avgY = (barCenters[i-1].y + barCenters[i].y + barCenters[i+1].y) / 3;
+          smoothed.push({x: barCenters[i].x, y: avgY});
+        }
+      }
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2.5; ctx.setLineDash([5, 5]); ctx.beginPath();
+      smoothed.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     
     // タイトル
     ctx.fillStyle = '#e5e7eb'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = 'bold 14px system-ui';
@@ -484,9 +891,28 @@ function draw(){
 function onViewChange() {
   const view = document.getElementById('view').value;
   const isCountryView = view === 'country_pie' || view === 'country_bar';
+  const isMultiPanel = view === 'multi_panel';
+  const specificControls = document.getElementById('specificControls');
   
-  // 国別ビューの場合、年フィルタとトップN選択を表示
-  if (isCountryView) {
+  // キャンバスとマルチパネルコンテナの表示切り替え
+  document.getElementById('chart').style.display = isMultiPanel ? 'none' : 'block';
+  document.getElementById('multiPanelContainer').style.display = isMultiPanel ? 'block' : 'none';
+  
+  // すべての固有コントロールを非表示
+  document.getElementById('topNLabel').style.display = 'none';
+  document.getElementById('showOthersLabel').style.display = 'none';
+  document.getElementById('sortByLabel').style.display = 'none';
+  document.getElementById('scaleLabel').style.display = 'none';
+  
+  // マルチパネルモードの場合
+  if (isMultiPanel) {
+    document.getElementById('yearFilterLabel').style.display = 'none';
+    document.getElementById('measureLabel').style.display = '';
+    document.getElementById('regionFilterLabel').style.display = 'none';
+    specificControls.style.display = 'none';
+  }
+  // 国別ビューの場合
+  else if (isCountryView) {
     // 年フィルタの構築
     if (gData && gData.years) {
       const yf = document.getElementById('yearFilter');
@@ -499,11 +925,21 @@ function onViewChange() {
       });
       document.getElementById('yearFilterLabel').style.display = '';
     }
+    
+    // 固有コントロールを表示
+    specificControls.style.display = 'flex';
     document.getElementById('topNLabel').style.display = '';
-    document.getElementById('regionFilterLabel').style.display = 'none';  // 地域フィルタは非表示
+    document.getElementById('sortByLabel').style.display = '';
+    document.getElementById('scaleLabel').style.display = view === 'country_bar' ? '' : 'none';
+    document.getElementById('showOthersLabel').style.display = view === 'country_pie' ? '' : 'none';
+    document.getElementById('regionFilterLabel').style.display = 'none';
+    document.getElementById('measureLabel').style.display = 'none';
   } else {
+    // 通常ビュー
     document.getElementById('yearFilterLabel').style.display = 'none';
-    document.getElementById('topNLabel').style.display = 'none';
+    document.getElementById('measureLabel').style.display = '';
+    specificControls.style.display = 'none';
+    
     // 地域フィルタは時系列ビューで表示
     if (gData && gData.regions && gData.regions.available && gData.regions.available.length > 0) {
       document.getElementById('regionFilterLabel').style.display = (view === 'timeseries' || view === 'yoy_diff') ? '' : 'none';
@@ -583,9 +1019,12 @@ window.addEventListener('load', () => {
     <div class="title" id="title">InvestViz Dashboard (MVP)</div>
     <div class="actions">
       <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="overlay"> 全系列を重ね描画</label>
+      <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="showTrend"> トレンドライン表示</label>
+      <button class="btn" onclick="exportMenu()" title="データをエクスポート">💾 エクスポート</button>
       <button class="btn" id="uploadNewBtn" onclick="showUploadPanel()" title="新しいCSVファイルをアップロード">📤 新規CSV</button>
     </div>
   </header>
+  <div id="toast" class="toast"></div>
   <main>
     <div id="uploader" class="panel">
       <div class="drop" id="drop">ここに CSV をドラッグ＆ドロップするか、ファイルを選択してください。</div>
@@ -600,37 +1039,81 @@ window.addEventListener('load', () => {
 
     <div class="panel" id="chartPanel">
       <div id="controls">
-        <label>ビュー: 
-          <select id="view" onchange="onViewChange()">
-            <option value="timeseries">時系列</option>
-            <option value="yoy_diff">前年比差分</option>
-            <option value="composition">構成比</option>
-            <option value="heatmap">ヒートマップ</option>
-            <option value="boxplot">箱ひげ図</option>
-            <option value="country_pie">国別構成比（円）</option>
-            <option value="country_bar">国別ランキング（棒）</option>
-          </select>
-        </label>
-        <label>系列: 
-          <select id="measure" onchange="draw()"></select>
-        </label>
-        <label id="regionFilterLabel" style="display:none;">地域: 
-          <select id="regionFilter" onchange="draw()"></select>
-        </label>
-        <label id="yearFilterLabel" style="display:none;">年: 
-          <select id="yearFilter" onchange="draw()"></select>
-        </label>
-        <label id="topNLabel" style="display:none;">表示数: 
-          <select id="topN" onchange="draw()">
-            <option value="5">トップ5</option>
-            <option value="10" selected>トップ10</option>
-            <option value="15">トップ15</option>
-            <option value="20">トップ20</option>
-          </select>
-        </label>
-        <button class="btn" id="exportBtn" onclick="exportCurrentView()" title="現在のビュー（フィルタ適用済み）をCSVでダウンロード">📥 CSVエクスポート</button>
+        <!-- 共通コントロール -->
+        <div class="control-row common">
+          <label>ビュー: 
+            <select id="view" onchange="onViewChange()">
+              <option value="timeseries">時系列</option>
+              <option value="yoy_diff">前年比差分</option>
+              <option value="composition">構成比</option>
+              <option value="heatmap">ヒートマップ</option>
+              <option value="boxplot">箱ひげ図</option>
+              <option value="country_pie">国別構成比（円）</option>
+              <option value="country_bar">国別ランキング（横棒）</option>
+              <option value="multi_panel">マルチパネル（2×2）</option>
+            </select>
+          </label>
+          <label id="measureLabel">系列: 
+            <select id="measure" onchange="draw()"></select>
+          </label>
+          <label id="regionFilterLabel" style="display:none;">地域: 
+            <select id="regionFilter" onchange="draw()"></select>
+          </label>
+          <label id="yearFilterLabel" style="display:none;">年: 
+            <select id="yearFilter" onchange="draw()"></select>
+          </label>
+        </div>
+        
+        <!-- ビュー固有コントロール -->
+        <div class="control-row specific" id="specificControls" style="display:none;">
+          <label id="topNLabel" style="display:none;">表示数: 
+            <input type="range" id="topN" min="5" max="30" value="10" step="1" onchange="draw(); updateTopNLabel();" style="width:120px;">
+            <span id="topNValue">10</span>
+          </label>
+          <label id="showOthersLabel" style="display:none;">
+            <input type="checkbox" id="showOthers" onchange="draw()"> その他を表示
+          </label>
+          <label id="sortByLabel" style="display:none;">並び順: 
+            <select id="sortBy" onchange="draw()">
+              <option value="value">値（降順）</option>
+              <option value="value_asc">値（昇順）</option>
+              <option value="name">国名 A→Z</option>
+              <option value="name_desc">国名 Z→A</option>
+            </select>
+          </label>
+          <label id="scaleLabel" style="display:none;">スケール: 
+            <select id="scaleType" onchange="draw()">
+              <option value="linear">リニア</option>
+              <option value="log">ログ</option>
+            </select>
+          </label>
+        </div>
+        
+        <div class="control-row">
+          <button class="btn" id="exportBtn" onclick="exportCurrentView()" title="現在のビュー（フィルタ適用済み）をCSVでダウンロード">📥 CSVエクスポート</button>
+        </div>
       </div>
       <canvas id="chart"></canvas>
+      <div id="multiPanelContainer" style="display:none;">
+        <div class="multi-panel-grid">
+          <div class="panel-item">
+            <div class="panel-title">時系列推移</div>
+            <canvas id="chart1"></canvas>
+          </div>
+          <div class="panel-item">
+            <div class="panel-title">前年比差分（YoY）</div>
+            <canvas id="chart2"></canvas>
+          </div>
+          <div class="panel-item">
+            <div class="panel-title">国別ランキング（Top 5）</div>
+            <canvas id="chart3"></canvas>
+          </div>
+          <div class="panel-item">
+            <div class="panel-title">構成比</div>
+            <canvas id="chart4"></canvas>
+          </div>
+        </div>
+      </div>
       <div class="legend" id="legend"></div>
       <div class="meta" id="status">CSV をアップロードすると可視化が表示されます。</div>
     </div>
@@ -653,10 +1136,27 @@ window.addEventListener('load', () => {
         params.append('region', region);
       }
       
-      // 年範囲（現在のデータから取得）
-      if (gData.years && gData.years.length > 0) {
-        params.append('year_from', gData.years[0]);
-        params.append('year_to', gData.years[gData.years.length - 1]);
+      // 国別ビューの場合
+      if (view === 'country_pie' || view === 'country_bar') {
+        const yearFilter = document.getElementById('yearFilter');
+        const year = yearFilter && yearFilter.value ? yearFilter.value : '';
+        if (year) {
+          params.append('year', year);
+        }
+        const topN = document.getElementById('topN') ? document.getElementById('topN').value : '10';
+        params.append('top_n', topN);
+        
+        // ソート情報（棒グラフ用）
+        if (view === 'country_bar') {
+          const sortBy = document.getElementById('sortBy') ? document.getElementById('sortBy').value : 'value';
+          params.append('sort_by', sortBy);
+        }
+      } else {
+        // 年範囲（現在のデータから取得）
+        if (gData.years && gData.years.length > 0) {
+          params.append('year_from', gData.years[0]);
+          params.append('year_to', gData.years[gData.years.length - 1]);
+        }
       }
       
       // セッションIDを追加（存在する場合）
@@ -674,15 +1174,83 @@ window.addEventListener('load', () => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      setTimeout(() => showToast('エクスポート完了！', 2000), 1000);
+    }
+    
+    function exportNormalized() {
+      if (!gSessionId) {
+        alert('セッションIDが見つかりません。データを再アップロードしてください。');
+        return;
+      }
+      showToast('正規化データをエクスポート中...', 2000);
+      const url = `/uploads/${gSessionId}/normalized.csv`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'normalized.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => showToast('エクスポート完了！', 2000), 1000);
+    }
+    
+    function exportPivot() {
+      if (!gSessionId) {
+        alert('セッションIDが見つかりません。データを再アップロードしてください。');
+        return;
+      }
+      showToast('ピボットデータをエクスポート中...', 2000);
+      const url = `/uploads/${gSessionId}/pivot_year_measure.csv`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'pivot_year_measure.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => showToast('エクスポート完了！', 2000), 1000);
+    }
+    
+    function exportImage() {
+      showToast('画像をエクスポート中...', 2000);
+      const canvas = document.getElementById('chart');
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chart_${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('画像エクスポート完了！', 2000);
+      }, 'image/png');
+    }
+    
+    // エクスポートメニュー
+    function exportMenu() {
+      if (!gData) {
+        alert('データがありません。CSVファイルをアップロードしてください。');
+        return;
+      }
       
-      // ステータス表示
-      const st = document.getElementById('status');
-      const prevText = st.textContent;
-      st.textContent = '✓ CSVエクスポートを開始しました...';
-      setTimeout(() => { st.textContent = prevText; }, 3000);
+      const choice = prompt('エクスポート種類を選択してください:\n1: 現在のビュー (CSV)\n2: 正規化データ (normalized.csv)\n3: ピボットデータ (pivot_year_measure.csv)\n4: 画像 (PNG)', '1');
+      if (!choice) return;
+      
+      if (choice === '1') {
+        showToast('現在のビューをエクスポート中...', 2000);
+        exportCurrentView();
+      } else if (choice === '2') {
+        exportNormalized();
+      } else if (choice === '3') {
+        exportPivot();
+      } else if (choice === '4') {
+        exportImage();
+      } else {
+        alert('無効な選択です');
+      }
     }
     
     document.getElementById('overlay').addEventListener('change', (e)=>{ gOverlay = e.target.checked; draw(); const legend = document.getElementById('legend'); legend.innerHTML = ''; if (gOverlay) { (gData.series||[]).forEach((s,i)=>{ const d=document.createElement('div'); d.className='item'; d.innerHTML=`<span class="swatch" style="background:${gColors[i%gColors.length]}"></span>${s.label}`; legend.appendChild(d); }); }});
+    document.getElementById('showTrend').addEventListener('change', ()=> draw());
     window.addEventListener('resize', ()=> draw());
   </script>
 </body>
@@ -722,8 +1290,11 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             region = params.get('region', [''])[0]
             year_from = params.get('year_from', [''])[0]
             year_to = params.get('year_to', [''])[0]
+            year = params.get('year', [''])[0]  # 単年指定（国別ビュー用）
             view = params.get('view', ['timeseries'])[0]
             sid = params.get('sid', [''])[0]  # セッションID
+            top_n = params.get('top_n', ['10'])[0]  # トップN
+            sort_by = params.get('sort_by', ['value'])[0]  # ソート順
             
             # normalized.csvを読み込み（セッション対応）
             if sid:
@@ -739,36 +1310,118 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(404, "No data available. Please upload a file first.")
                 return
             
-            # CSVを読み込んでフィルタ適用
-            filtered_rows = []
-            with open(norm_path, 'r', encoding='utf-8') as f:
-                reader = csv_module.DictReader(f)
-                for row in reader:
-                    # 地域フィルタ
-                    if region and row.get('segment_region', '') != region:
-                        continue
-                    
-                    # 年範囲フィルタ
-                    if year_from or year_to:
-                        try:
-                            year = int(row.get('year', 0) or 0)
-                            if year_from and year < int(year_from):
-                                continue
-                            if year_to and year > int(year_to):
-                                continue
-                        except (ValueError, TypeError):
+            # ビュー種別に応じた処理
+            if view in ['country_pie', 'country_bar']:
+                # 国別ビュー用の特別処理（集計済みデータを生成）
+                from mof_investviz.normalize import get_region_level
+                
+                # 年フィルタ
+                target_year = year or year_to or None
+                
+                # データを集計
+                country_data = {}
+                with open(norm_path, 'r', encoding='utf-8') as f:
+                    reader = csv_module.DictReader(f)
+                    for row in reader:
+                        segment_region = row.get('segment_region', '')
+                        if not segment_region:
                             continue
-                    
-                    filtered_rows.append(row)
+                        
+                        # 国レベルのみを対象
+                        level = get_region_level(segment_region)
+                        if level != 'country':
+                            continue
+                        
+                        # 年フィルタ
+                        if target_year:
+                            try:
+                                row_year = int(row.get('year', 0) or 0)
+                                if row_year != int(target_year):
+                                    continue
+                            except (ValueError, TypeError):
+                                continue
+                        
+                        # 集計
+                        val = float(row.get('value_100m_yen', 0) or 0)
+                        if segment_region not in country_data:
+                            country_data[segment_region] = 0
+                        country_data[segment_region] += val
+                
+                # ソート
+                items = list(country_data.items())
+                if sort_by == 'value':
+                    items.sort(key=lambda x: x[1], reverse=True)
+                elif sort_by == 'value_asc':
+                    items.sort(key=lambda x: x[1])
+                elif sort_by == 'name':
+                    items.sort(key=lambda x: x[0])
+                elif sort_by == 'name_desc':
+                    items.sort(key=lambda x: x[0], reverse=True)
+                
+                # トップN
+                try:
+                    n = int(top_n)
+                    items = items[:n]
+                except (ValueError, TypeError):
+                    pass
+                
+                # CSV用の行を生成
+                filtered_rows = [
+                    {'country': country, 'value_100m_yen': value, 'rank': i+1}
+                    for i, (country, value) in enumerate(items)
+                ]
+            else:
+                # 通常のビュー用のフィルタ処理
+                filtered_rows = []
+                with open(norm_path, 'r', encoding='utf-8') as f:
+                    reader = csv_module.DictReader(f)
+                    for row in reader:
+                        # 地域フィルタ
+                        if region and row.get('segment_region', '') != region:
+                            continue
+                        
+                        # 年範囲フィルタ
+                        if year_from or year_to:
+                            try:
+                                row_year = int(row.get('year', 0) or 0)
+                                if year_from and row_year < int(year_from):
+                                    continue
+                                if year_to and row_year > int(year_to):
+                                    continue
+                            except (ValueError, TypeError):
+                                continue
+                        
+                        filtered_rows.append(row)
             
             if not filtered_rows:
                 self.send_error(404, "No data matches the specified filters.")
                 return
             
-            # CSVに書き出し（UTF-8 BOM付き）
+            # CSVに書き出し（UTF-8 BOM付き + メタデータ）
+            import datetime
             output = BytesIO()
             output.write('\ufeff'.encode('utf-8'))  # BOMを追加
+            
+            # メタデータヘッダー
             text_output = StringIO()
+            text_output.write(f'# InvestViz CSV Export\n')
+            text_output.write(f'# Generated: {datetime.datetime.now().isoformat()}\n')
+            text_output.write(f'# View: {view}\n')
+            if view in ['country_pie', 'country_bar']:
+                text_output.write(f'# Year: {year or "latest"}\n')
+                text_output.write(f'# Top N: {top_n}\n')
+                text_output.write(f'# Sort: {sort_by}\n')
+            else:
+                if region:
+                    text_output.write(f'# Region: {region}\n')
+                if year_from:
+                    text_output.write(f'# Year From: {year_from}\n')
+                if year_to:
+                    text_output.write(f'# Year To: {year_to}\n')
+            text_output.write(f'# Rows: {len(filtered_rows)}\n')
+            text_output.write('#\n')
+            
+            # データ
             if filtered_rows:
                 writer = csv_module.DictWriter(text_output, fieldnames=filtered_rows[0].keys())
                 writer.writeheader()
@@ -776,15 +1429,29 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             output.write(text_output.getvalue().encode('utf-8'))
             
             # ファイル名を生成（URLエンコード）
+            import datetime
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
             filename_parts = ['investviz', view]
-            if region:
-                # 日本語の地域名をASCII互換に変換
-                import unicodedata
-                region_ascii = region.replace(' ', '_').replace('/', '_')
-                filename_parts.append(region_ascii)
-            if year_from or year_to:
-                year_range = f"{year_from or 'start'}-{year_to or 'end'}"
-                filename_parts.append(year_range)
+            
+            if view in ['country_pie', 'country_bar']:
+                # 国別ビュー
+                if year:
+                    filename_parts.append(f'year{year}')
+                filename_parts.append(f'top{top_n}')
+                if sort_by != 'value':
+                    filename_parts.append(sort_by)
+            else:
+                # 通常ビュー
+                if region:
+                    # 日本語の地域名をASCII互換に変換
+                    import unicodedata
+                    region_ascii = region.replace(' ', '_').replace('/', '_')
+                    filename_parts.append(region_ascii)
+                if year_from or year_to:
+                    year_range = f"{year_from or 'start'}-{year_to or 'end'}"
+                    filename_parts.append(year_range)
+            
+            filename_parts.append(timestamp)
             filename = '_'.join(filename_parts) + '.csv'
             
             # レスポンスを返す

@@ -32,6 +32,19 @@ python3 scripts/serve_dashboard.py --build-dir build --host 0.0.0.0 --port 8000
 ```
 アクセス: http://localhost:8000/
 
+## 3.5 再起動（WSL/bash・手動手順）
+開発中にポートを切り替えて素早く再起動したい場合は、次のスクリプトを使います。
+
+```
+cd /home/uka_agai/mof_investviz
+bash scripts/wsl_restart_backend.sh 8002   # 8000にしたい場合は末尾を8000に
+```
+
+内部でやっていること:
+- 既存の `8001` を停止
+- 指定ポート（例: `8002`）で `serve_upload_dashboard.py` を起動
+- ヘルスチェック後、URL/PID/ログを表示（`.server_<PORT>.log`）
+
 ## 4. トラブルシュート
 - 仮想環境未有効: `source .venv/bin/activate`
 - ポート競合: `--port 8001` 等に変更
@@ -42,3 +55,6 @@ python3 scripts/serve_dashboard.py --build-dir build --host 0.0.0.0 --port 8000
 - 対応シェルは bash のみです。PowerShell は使用しません。
 - 追加の外部サービスや DB は不要（標準ライブラリ + pandas などの依存のみ）。
 
+### 5.1 重要な注意（PowerShell 禁止）
+- 本リポジトリのローカル起動・再起動・停止は、WSL(Ubuntu) の bash 前提です。
+- どのような状況でも PowerShell 経由の実行は行わないでください（ネットワーク/パスの差異により不安定になります）。
