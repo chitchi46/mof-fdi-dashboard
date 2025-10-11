@@ -1,56 +1,53 @@
-# CI / Test Automation Rollout
+# CI / テスト自動化の導入
 
-## Goal
-- Establish automated validation (schema tests, normalization regressions, UI smoke) and continuous integration to detect issues before release.
+## 目的（Goal）
+- スキーマテスト・正規化回帰・UIスモーク等の自動検証とCIを整備し、リリース前に問題を検知する。
 
-## Scope
-- Define testing strategy (unit, integration, e2e) and coverage goals.
-- Add test fixtures, scripts, and CI workflow (GitHub Actions or similar) running on push/PR.
-- Integrate linting/formatting checks and static analysis as appropriate.
-- Publish badges/status indicators and contributor guidelines.
-- Out of scope: full CD/deployment pipeline.
+## 範囲（Scope）
+- テスト戦略（単体/結合/E2E）とカバレッジ目標を定義する。
+- プッシュ/PRで実行されるCIワークフロー（GitHub Actions等）と、テスト用フィクスチャ/スクリプトを追加する。
+- Lint/フォーマット/静的解析を適切に統合する。
+- バッジ/ステータス表示とコントリビュータガイドを公開する。
+- 対象外: 本番デプロイのCDパイプライン。
 
-## Deliverables
-- `tests/` suite with coverage for normalization (fixtures), summary aggregation, and UI API endpoints.
-- Playwright (or similar) e2e scripts covering upload → visualization → export flows.
-- CI configuration file (`.github/workflows/ci.yml` or equivalent) running lint, unit, integration, e2e (headless), and docs build.
-- Coverage reports and thresholds (e.g., ≥80% for core modules).
-- Contributor guide updates (README or CONTRIBUTING) describing local test commands.
+## 成果物（Deliverables）
+- `tests/` 一式（正規化: フィクスチャ、サマリ集計、UI APIエンドポイントをカバー）。
+- Playwright 等によるE2E（アップロード→可視化→エクスポートの流れ）。
+- CI構成（`.github/workflows/ci.yml` 等）: lint/単体/結合/E2E（ヘッドレス）/ドキュメントビルドを実行。
+- カバレッジレポートと閾値（例: 中核モジュール ≥80%）。
+- README/CONTRIBUTING のテスト実行手順更新。
 
-## Work Breakdown
-1. **Testing Framework Setup**
-   - Choose Python test runner (pytest) and configure environment (fixtures, test data).
-   - Set up JS testing for frontend if needed (Vitest/Jest) and e2e (Playwright).
-2. **Test Authoring**
-   - Unit tests for normalization helpers, aggregation, export services.
-   - Integration tests covering CLI scripts (`run_pipeline.py`, `serve_dashboard.py`).
-   - E2E tests uploading sample files, interacting with filters, verifying chart JSON + CSV exports.
-3. **Static Analysis & Linting**
-   - Add tools (ruff/flake8, mypy optional, eslint/prettier) with configs.
-   - Update `pyproject.toml` or config files accordingly.
-4. **CI Workflow**
-   - Author workflow file(s) running on push/PR; include caching for deps.
-   - Configure artifact uploads for test reports/screenshots when failures occur.
-5. **Documentation & Developer UX**
-   - Update docs/README with testing instructions.
-   - Add badges (build/test status) to root README.
-6. **Stabilization**
-   - Ensure tests are deterministic (seed randomness, control time).
-   - Add runbooks for flaky test triage.
+## 作業分解（Work Breakdown）
+1. テスト基盤のセットアップ
+   - Pythonはpytestを採用し、フィクスチャ/テストデータを整える。
+   - 必要に応じてフロントのJSテスト（Vitest/Jest）とE2E（Playwright）を用意。
+2. テスト作成
+   - 正規化ヘルパー、集計、エクスポートサービスの単体テスト。
+   - CLIスクリプト（`run_pipeline.py`、`serve_dashboard.py`）の結合テスト。
+   - サンプルアップロード→フィルタ操作→グラフJSON/CSV検証までのE2E。
+3. 静的解析とLint
+   - ruff/flake8、（任意で）mypy、eslint/prettierを導入し設定。
+4. CIワークフロー
+   - プッシュ/PRで走るジョブを作成、依存キャッシュと失敗時の成果物（レポート/スクショ）保存を設定。
+5. 文書と開発UX
+   - docs/READMEにテスト手順を記載。
+   - ルートREADMEにビルド/テストバッジを追加。
+6. 安定化
+   - 決定論的テスト（乱数シード/時間制御）、フレーク時のトリアージ手順を整備。
 
-## Dependencies
-- Requires synthetic/regression datasets (coordinate with `.plans/normalization-enhancements.md`).
-- Visualization/export features should expose test hooks (data-test ids).
+## 依存関係（Dependencies）
+- 合成/回帰データセット（`.plans/normalization-enhancements.md` と連携）。
+- 可視化/エクスポートはテスト用フック（data-test id など）を提供。
 
-## Risks & Mitigations
-- **Long CI runs** → parallelize jobs, cache dependencies, split slow tests.
-- **Flaky e2e** → use robust waiting strategies, headless Chrome/Firefox.
+## リスクと対策（Risks & Mitigations）
+- CIが長い → 並列化、依存キャッシュ、重いテストの分割。
+- E2Eのフレーク → 堅牢な待機戦略、ヘッドレスChrome/Firefoxの利用。
 
-## Open Questions
-- Preferred CI platform? (Assumed GitHub Actions; confirm.)
-- Need for nightly jobs (large dataset benchmarks)?
+## 未決事項（Open Questions）
+- CIプラットフォームの確定（前提はGitHub Actions）。
+- ナイトリ―ジョブ（大規模ベンチ）の要否。
 
-## Acceptance Criteria
-- CI pipeline completes in <10 minutes with green run on main branch.
-- Tests catch seeded regression (introduce deliberate failure to confirm detection).
-- Documentation clearly guides contributors through local test execution.
+## 受け入れ基準（Acceptance Criteria）
+- main ブランチでCIが10分未満で完走しグリーン。
+- 意図的な回帰を検知可能（失敗挿入で確認）。
+- ローカルテスト実行手順が明確にドキュメント化されている。

@@ -1,59 +1,56 @@
-# Dashboard CSV Export Overhaul
+# ダッシュボードのCSVエクスポート刷新
 
-## Goal
-- Allow users to download CSV outputs that reflect the current dashboard state (filters, selected view, measure scope) with minimal latency.
+## 目的（Goal）
+- 現在のダッシュボード状態（フィルタ/選択ビュー/系列範囲）を反映したCSVを、低遅延でダウンロードできるようにする。
 
-## Scope
-- API design for exporting normalized slices and aggregated outputs per view (timeseries, yoy diff, composition, heatmap matrix, boxplot stats).
-- UI affordances (export menu/button, progress feedback) tied to active filters.
-- Server-side generation with caching and streaming for large datasets.
-- Documentation and tests covering export formats.
-- Out of scope: PDF/image export, scheduled delivery.
+## 範囲（Scope）
+- ビュー別のエクスポートAPI設計（時系列、前年比差分、構成比、ヒートマップ行列、箱ひげ統計）。
+- アクティブなフィルタに連動するUI（エクスポートメニュー/ボタン、進行表示）。
+- 大規模データ向けにサーバ側でキャッシュ/ストリーミングを実装。
+- エクスポート形式のドキュメントとテストを整備。
+- 対象外: PDF/画像エクスポート、定期配信。
 
-## Deliverables
-- `/api/export` endpoint (or equivalent) supporting `type`, `filters`, `format`, `locale` params.
-- Reusable export service layer that reuses aggregation utilities (single code path with dashboard).
-- UI export controls with per-view defaults + advanced options modal.
-- CSV schema documentation (column descriptions, units, sample rows) in `docs/USAGE.md`.
-- Automated tests (unit + integration) for each export type.
+## 成果物（Deliverables）
+- `/api/export` エンドポイント（`type`/`filters`/`format`/`locale` を受け付け）。
+- 集計ユーティリティを再利用するエクスポートサービス層（ダッシュボードと単一路線）。
+- ビューごとの既定と詳細オプションを持つUIコントロール。
+- `docs/USAGE.md` にCSVスキーマ（列説明・単位・サンプル行）。
+- 各エクスポート種別の単体/結合テスト。
 
-## Work Breakdown
-1. **Requirements & Format Spec**
-   - Define required export types and column schemas.
-   - Align naming conventions (snake_case, units) with `schema.yaml`.
-   - Decide on compression (optional `.zip` for multi-file exports).
-2. **Backend Implementation**
-   - Refactor aggregation logic into dedicated module (if not already separate) for reuse.
-   - Implement export serialization (CSV writer, optional streaming) with filter application (side, metric, region, year range, measure list).
-   - Add caching (e.g., keyed by hash of inputs + filters) to avoid recomputation for identical requests.
-   - Harden error handling/timeouts; write audit entries to `parse_log.json` or separate export log.
-3. **Frontend Integration**
-   - Add export button/menu (e.g., “Download CSV”) with primary action = current view, secondary list for other types.
-   - Show spinner/toast for long running downloads; disable when no data.
-   - Ensure exported file names encode dataset + filters (e.g., `investviz_timeseries_assets_asia_2010-2024.csv`).
-4. **Docs & Examples**
-   - Update `docs/USAGE.md` with table mapping views → export outputs, sample commands.
-   - Provide sample exported files in `examples/` for QA regression.
-5. **Testing**
-   - Unit tests for serialization helpers.
-   - Integration tests hitting `/api/export` with synthetic datasets.
-   - End-to-end test (Playwright) verifying UI triggers server and downloads expected CSV.
+## 作業分解（Work Breakdown）
+1. 要件・フォーマット定義
+   - 必要なエクスポート種別と列スキーマを定義。
+   - 命名規約（snake_case, 単位）を `schema.yaml` に合わせる。
+   - 圧縮の要否（複数ファイル時の `.zip`）。
+2. バックエンド実装
+   - 集計ロジックを専用モジュールへリファクタし再利用。
+   - フィルタ適用（side/metric/region/year/measure）込みのCSVシリアライズ（必要に応じストリーミング）。
+   - 入力＋フィルタのハッシュでキャッシュし再計算を回避。エラー/タイムアウト堅牢化、監査ログ（`parse_log.json` 等）。
+3. フロント統合
+   - エクスポートUI（主操作＝現在のビュー、サブ＝他種別）。
+   - 長時間ダウンロードのスピナー/トースト、データ無し時の無効化。
+   - ファイル名にデータセット＋フィルタを符号化（例: `investviz_timeseries_assets_asia_2010-2024.csv`）。
+4. 文書・サンプル
+   - `docs/USAGE.md` にビュー→出力の対応表、サンプルコマンド。
+   - `examples/` に出力例を置き回帰検証に利用。
+5. テスト
+   - シリアライズの単体、`/api/export` の結合、UIからのE2E（Playwright）。
 
-## Dependencies
-- Region filter implementation (see `.plans/region-analysis.md`).
-- Aggregation improvements (see `.plans/normalization-enhancements.md` for shared data structures).
+## 依存関係（Dependencies）
+- 地域フィルタ（`.plans/region-analysis.md`）。
+- 集計の改良（`.plans/normalization-enhancements.md`）。
 
-## Risks & Mitigations
-- **Large exports** may block server → stream responses, enforce row limits + warn user.
-- **Inconsistent filters** between UI and API → centralize filter state serialization (e.g., query param hash).
-- **CSV schema drift** → version each export type and add automated contract tests.
+## リスクと対策（Risks & Mitigations）
+- 大容量でサーバが詰まる → ストリーミング、行数上限、ユーザ警告。
+- UIとAPIでフィルタ不整合 → フィルタ状態の集中シリアライズ（クエリハッシュ等）。
+- CSVスキーマのドリフト → 種別ごとのバージョンと自動契約テスト。
 
-## Open Questions
-- Do we need zipped multi-tab exports? (e.g., one file per measure?)
-- Should exports include metadata header rows (source, filters) as comments?
-- Support for TSV/Parquet/JSON in addition to CSV?
+## 未決事項（Open Questions）
+- マルチタブ（指標別）zipが必要か。
+- 出力にメタ（ソース/フィルタ）をコメントとして含めるか。
+- CSV以外（TSV/Parquet/JSON）対応の要否。
 
-## Acceptance Criteria
-- Users can download per-view CSV reflecting current filters within <5 seconds for sample datasets.
-- Export schemas documented and covered by tests.
-- No regressions in existing normalized output (pipeline still produces baseline CSVs).
+## 受け入れ基準（Acceptance Criteria）
+- サンプル条件で5秒未満でダウンロード可能。
+- スキーマは文書化されテストで担保。
+- 既存の正規化出力に回帰がない（ベースラインCSVは従来通り生成）。

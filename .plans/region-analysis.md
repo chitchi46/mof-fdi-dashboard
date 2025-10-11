@@ -1,63 +1,63 @@
-# Region-Segmented Analysis
+# 地域セグメント分析
 
-## Goal
-- Normalize region/area information into `segment_region` and expose it as a first-class filter/dimension in the dashboard so users can compare geographies (single or multiple) across all views.
+## 目的（Goal）
+- 地域/エリア情報を `segment_region` に正規化し、ダッシュボードで一次フィルタ/次元として扱えるようにして、全ビューで地域比較（単一/複数）を可能にする。
 
-## Scope
-- Build a canonical region dictionary (JP/EN aliases, ISO codes, groupings) and version it.
-- Enhance normalization to detect region columns/headers/footnotes and populate `segment_region`.
-- Extend summary data structures and API payloads to support region slicing.
-- Add multi-select region filters and region-aware legends/labels across all charts.
-- Update documentation, parse logs, and tests.
-- Out of scope: country-level drilldowns beyond the dictionary, UI internationalization.
+## 範囲（Scope）
+- 正準の地域辞書（JP/EN別名、ISOコード、グルーピング）を作成し版管理する。
+- 正規化で地域列/ヘッダー/脚注を検出して `segment_region` を付与する。
+- サマリ構造とAPIを地域スライスに対応させる。
+- すべてのチャートに地域マルチセレクトと地域対応の凡例/ラベルを追加。
+- ドキュメント/パースログ/テストを更新。
+- 対象外: 辞書範囲を超える国レベルの深掘り、UIの国際化。
 
-## Deliverables
-- `src/mof_investviz/normalize.py`: region extraction logic with unit tests.
-- Region dictionary asset (e.g. `data/dictionaries/regions.yml`) with version metadata.
-- Updated summary builder capable of grouping by region (new helper module if needed).
-- Dashboard UI enhancements: region multi-select, clear filter indicators, persisted state.
-- Updated docs (README, docs/README, docs/USAGE) describing region analysis workflow.
-- Automated tests covering region normalization + UI smoke (Playwright or equivalent).
+## 成果物（Deliverables）
+- `src/mof_investviz/normalize.py`: 地域抽出ロジックと単体テスト。
+- 地域辞書アセット（例: `data/dictionaries/regions.yml`）と版情報。
+- 地域でグルーピング可能なサマリビルダー（必要なら新ヘルパーモジュール）。
+- ダッシュボードUI強化（地域マルチセレクト、フィルタ表示、状態保持）。
+- ワークフロー記載のDocs（README、docs/README、USAGE）。
+- 地域正規化＋UIスモークの自動テスト（Playwright 等）。
 
-## Work Breakdown
-1. **Discovery & Dictionary**
-   - Collect region labels from sample datasets; classify frequent patterns (kanji, katakana, English).
-   - Define canonical keys (e.g., ISO-2/3, JP-specific groups) and produce `regions.yml` + schema.
-   - Document fallback strategy for unknown regions (e.g., `Unknown`, `Other`).
-2. **Normalization Enhancements**
-   - Identify columns/headers that map to region info (regexes, header heuristics, footnotes).
-   - Implement parser functions returning normalized region IDs + display labels.
-   - Update `NormalizeResult.meta` with detected region coverage.
-   - Add unit tests using fixtures that cover ambiguous cases.
-3. **Summary/Aggregation Layer**
-   - Introduce aggregation utilities (e.g., `aggregate_by_region`) returning per-region timeseries, compositions, heatmaps.
-   - Ensure existing `summary.json` retains backwards compatibility while adding region-aware sections (or version bump).
-4. **Dashboard UI/UX**
-   - Add region multi-select with search + “select all” option; persist to URL hash/localStorage.
-   - Update all views to respect active regions (stacked/overlay choices, color key per region).
-   - Provide quick chips indicating active filters + reset control.
-5. **Docs & Logging**
-   - Document workflow in `docs/README.md` and `docs/USAGE.md` (upload, filter, download by region).
-   - Extend `parse_log.json` to summarize region detection results.
-6. **Validation**
-   - Add regression tests (unit + integration) ensuring region filters alter outputs.
-   - Manual QA checklist (upload known dataset, test multi-select, download CSVs verifying filters).
+## 作業分解（Work Breakdown）
+1. 調査と辞書
+   - サンプルから地域ラベルを収集し、頻用パターン（漢字/カナ/英語）を分類。
+   - 正準キー（ISO2/3、国内グループ等）を定義して `regions.yml`＋スキーマを作成。
+   - 未知地域のフォールバック方針（`Unknown`/`Other`）。
+2. 正規化強化
+   - 地域情報に相当する列/ヘッダー/脚注を特定（正規表現、ヘッダー規則）。
+   - 正規化地域ID＋表示名を返すパーサを実装。
+   - `NormalizeResult.meta` に検出カバレッジを記録。
+   - 曖昧ケースを含むフィクスチャで単体テスト追加。
+3. サマリ/集計層
+   - `aggregate_by_region` 等を導入（地域別時系列/構成比/ヒートマップ）。
+   - 既存 `summary.json` との後方互換を確保（必要時は版上げ）。
+4. ダッシュボードUX
+   - 検索付きマルチセレクト、「すべて選択」、URLハッシュ/LocalStorageへ保存。
+   - すべてのビューが地域選択を尊重（積み上げ/オーバーレイ、地域ごとの色キー）。
+   - アクティブフィルタを示すチップとリセット。
+5. Docsとログ
+   - `docs/README.md` と `docs/USAGE.md` にワークフロー（アップロード/フィルタ/地域別DL）を記載。
+   - `parse_log.json` に地域検出の要約を追加。
+6. 検証
+   - 地域フィルタが出力に反映されることを、単体/結合で回帰テスト。
+   - 手動QA（既知データでマルチセレクト、CSVがフィルタ整合）。
 
-## Dependencies
-- Requires region dictionary asset and agreement on taxonomy with stakeholders.
-- Dashboard CSV export work should align with region filters (coordinate with `.plans/dashboard-csv-export.md`).
+## 依存関係（Dependencies）
+- 地域辞書アセットと分類体系の合意。
+- CSVエクスポートは地域フィルタに整合（`.plans/dashboard-csv-export.md` と連携）。
 
-## Risks & Mitigations
-- **Ambiguous labels** (e.g., “アジア計”) → maintain alias table + heuristic weight, log unresolved items.
-- **Performance hit** when slicing by many regions → pre-aggregate summary, debounce UI updates.
-- **Backward compatibility** with existing summary consumers → version schema and supply defaults when no region dimension is requested.
+## リスクと対策（Risks & Mitigations）
+- 曖昧ラベル（例: 「アジア計」）→ 別名表＋重み付け、未解決はログ。
+- 多地域スライス時の性能低下 → 事前集計、UIのデバウンス。
+- 既存summary利用者との互換 → スキーマ版上げ、地域次元無し時の既定値提供。
 
-## Open Questions
-- Do we need hierarchical regions (continent → subregion) at launch?
-- Should unknown regions be displayed or hidden by default?
-- Expected maximum number of simultaneous regions for UI usability?
+## 未決事項（Open Questions）
+- 階層地域（大陸→下位地域）の初期対応の要否。
+- 未知地域は既定で表示/非表示どちらか。
+- UIとして同時選択可能な地域数の上限。
 
-## Acceptance Criteria
-- Uploading a dataset with region info populates `segment_region` ≥ 95% accuracy on sample files.
-- Dashboard exposes region filters affecting all chart types and CSV downloads.
-- Documentation reflects the new workflow, and automated tests cover dictionary + UI.
+## 受け入れ基準（Acceptance Criteria）
+- 地域情報を含むデータで `segment_region` 正答率 ≥95%。
+- ダッシュボードが全ビュー/CSVで地域フィルタを反映。
+- Docs が新ワークフローを反映し、辞書＋UIの自動テストが存在。

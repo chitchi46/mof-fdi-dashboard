@@ -1,60 +1,59 @@
-# Large-Scale Performance Optimization
+# 大規模データのパフォーマンス最適化
 
-## Goal
-- Ensure the pipeline and dashboard remain responsive with large datasets (≥100k rows, dozens of measures/regions) through efficient data processing, caching, and rendering strategies.
+## 目的（Goal）
+- 10万行以上・多数の指標/地域でも、パイプラインとダッシュボードの応答性を維持（効率的な処理/キャッシュ/レンダリング）。
 
-## Scope
-- Benchmark current pipeline and UI to establish baselines.
-- Implement data reduction (downsampling, windowing) and caching for dashboard summaries.
-- Move heavy computations off the main thread (Web Workers) and optimize rendering loops.
-- Introduce instrumentation for monitoring performance regressions.
-- Out of scope: distributed processing or backend storage redesign.
+## 範囲（Scope）
+- 現行パイプライン/UIのベンチを取り、基準値を確立。
+- サマリに対するデータ削減（ダウンサンプル/ウィンドウ）とキャッシュを導入。
+- 重い計算をメインスレッドから分離（Web Worker）し、描画ループを最適化。
+- 性能回帰を監視するための計装を追加。
+- 対象外: 分散処理やストレージ再設計。
 
-## Deliverables
-- Benchmark report (pipeline runtime, memory footprint, UI frame times) with sample datasets.
-- Optimized aggregation layer (pre-computed cubes, memoization keyed by filters).
-- LTTB or similar downsampling for high-density timeseries + ability to view raw detail on demand.
-- Web Worker implementation for JSON parsing/aggregation to keep UI thread responsive.
-- Performance dashboards/logging (simple metrics output, optional `stats.json`).
-- Automated performance tests (CI job or manual script) detecting regressions.
+## 成果物（Deliverables）
+- ベンチマークレポート（パイプライン時間、メモリ、UIフレームタイム）。
+- 最適化された集計層（プリ計算キューブ、フィルタキーによるメモ化）。
+- 高密度時系列のLTTB等のダウンサンプリング＋必要時に生データ表示。
+- JSON 解析/集計のWeb Worker化（UIスレッドを保護）。
+- 性能ダッシュボード/ログ（簡易メトリクス、`stats.json` 任意）。
+- 自動パフォーマンステスト（CIジョブ/手動スクリプト）。
 
-## Work Breakdown
-1. **Benchmarking**
-   - Create large synthetic dataset (varied measures, regions, years) + capture pipeline runtime/memory.
-   - Profile dashboard operations (load, filter change, export) using browser dev tools.
-2. **Pipeline Optimizations**
-   - Optimize normalization loops (vectorize numeric parsing where possible, avoid redundant conversions).
-   - Cache intermediate tables (e.g., normalized DataFrame) for reuse between exports.
-3. **Summary/Data Layer**
-   - Build multi-dimensional cache (year × measure × region) to avoid recomputation.
-   - Provide aggregated + raw slices so UI can request appropriate granularity.
-4. **Downsampling & Tiling**
-   - Implement LTTB or percentile-based reduction for timeseries > N points.
-   - Offer toggles for full-resolution downloads vs. downsampled display.
-5. **Concurrency & Workers**
-   - Offload heavy parsing/aggregation to Web Worker; define message protocol.
-   - Ensure progress feedback + cancellation support.
-6. **Rendering Efficiency**
-   - Profile new visualization layer (see `.plans/visual-quality-upgrade.md`) for CPU usage.
-   - Implement virtualization for legends/tooltips when many series.
-7. **Monitoring & Tests**
-   - Add performance test suite run locally/CI (e.g., `pytest-benchmark` + Playwright perf harness).
-   - Document benchmarks and thresholds; fail build when regressions exceed tolerance.
+## 作業分解（Work Breakdown）
+1. ベンチマーク
+   - 大規模合成データを作成（指標/地域/年の多様性）し、時間/メモリを計測。
+   - ブラウザDevToolsでロード/フィルタ変更/エクスポートをプロファイル。
+2. パイプライン最適化
+   - 数値パースのベクトル化、冗長変換の排除。
+   - 中間テーブル（例: 正規化DF）をキャッシュしエクスポート間で再利用。
+3. サマリ/データ層
+   - 年×系列×地域の多次元キャッシュを構築し再計算を回避。
+   - 集計済み/生スライスを用意しUIが粒度を選べるようにする。
+4. ダウンサンプリング/タイル
+   - N点超の時系列にLTTBやパーセンタイル縮約を適用。
+   - 表示は縮約、DLはフル解像度を選択可能にする。
+5. 並行処理/Worker
+   - 重い解析/集計をWorkerへ。メッセージプロトコル、進捗/キャンセル対応。
+6. レンダリング効率
+   - 可視化レイヤ（`.plans/visual-quality-upgrade.md`）のCPU使用をプロファイル。
+   - 系列が多い場合の凡例/ツールチップを仮想化。
+7. 監視とテスト
+   - `pytest-benchmark` + Playwright のperfハーネスでローカル/CI実行。
+   - 基準と閾値を文書化し、許容超過で失敗させる。
 
-## Dependencies
-- Visualization upgrade plan for rendering improvements.
-- CSV export plan to ensure caching strategies align (shared aggregation layer).
+## 依存関係（Dependencies）
+- 可視化アップグレード計画。
+- CSVエクスポート計画（キャッシュ戦略の整合）。
 
-## Risks & Mitigations
-- **Premature optimization** → rely on baseline metrics to prioritize.
-- **Complex caching** → implement consistent invalidation (hash filters) and instrumentation for cache hits/misses.
-- **Worker overhead** → batch operations to amortize serialization costs.
+## リスクと対策（Risks & Mitigations）
+- 早すぎる最適化 → 基準値に基づいて優先度を決定。
+- 複雑なキャッシュ → ハッシュによる無効化とヒット/ミスの計測。
+- Workerオーバーヘッド → 処理のバッチ化で相殺。
 
-## Open Questions
-- Are there hard requirements for mobile performance?
-- Should caching persist between sessions (IndexedDB) or remain in-memory per session?
+## 未決事項（Open Questions）
+- モバイルでの性能要件。
+- キャッシュをセッション間で保持（IndexedDB）するか、セッション内メモリに限定するか。
 
-## Acceptance Criteria
-- Pipeline processes 100k-row dataset in ≤30s (target) and dashboard interactions stay <200ms for filter changes.
-- Downsampling toggles maintain visual fidelity while reducing render time by ≥50% on stress dataset.
-- Performance metrics tracked and documented; regression tests in place.
+## 受け入れ基準（Acceptance Criteria）
+- パイプラインが10万行を≤30秒、フィルタ変更は<200ms。
+- ダウンサンプルで視認性を保ちつつレンダ時間を≥50%短縮（ストレスデータ）。
+- 性能メトリクスを追跡・文書化し、回帰テストが存在する。

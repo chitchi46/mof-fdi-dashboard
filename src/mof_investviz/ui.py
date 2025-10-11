@@ -43,6 +43,7 @@ INDEX_HTML = """<!doctype html>
 let gData = null;
 let gColors = ['#60a5fa','#f472b6','#f59e0b','#34d399','#a78bfa','#f43f5e','#22d3ee'];
 let gOverlay = false;
+let gSessionId = null;  // 現在のセッションID
 
 async function uploadAndAnalyze(file){
   const st = document.getElementById('uploadStatus');
@@ -52,6 +53,13 @@ async function uploadAndAnalyze(file){
   if (!res.ok) { st.textContent = 'アップロードに失敗しました'; return; }
   const obj = await res.json();
   gData = obj.summary;
+  // セッションIDを抽出（links.normalized_csv から）
+  if (obj.links && obj.links.normalized_csv) {
+    const match = obj.links.normalized_csv.match(/\/uploads\/([^\/]+)\//);
+    if (match) {
+      gSessionId = match[1];
+    }
+  }
   document.getElementById('title').textContent = (gData.title || 'MVP Summary');
   const ms = document.getElementById('measure');
   ms.innerHTML='';
@@ -307,7 +315,7 @@ function draw(){
     ctx.fillText('箱ひげ図（年次・系列分布）', 0, -8);
   } else if (view === 'country_pie') {
     // 円グラフ：国別構成比（最新年または選択年）
-    if (!gData.regions || !gData.regions.series || gData.regions.series.length === 0) {
+    if (!gData.countries || !gData.countries.series || gData.countries.series.length === 0) {
       ctx.fillText('国別データがありません', 10, 20); ctx.restore(); return;
     }
     const yearFilter = document.getElementById('yearFilter');
@@ -317,13 +325,13 @@ function draw(){
     // 各国の値を収集
     const countryData = [];
     let total = 0;
-    for (const regionSeries of gData.regions.series) {
-      if (!regionSeries.x || !regionSeries.y) continue;
-      const idx = regionSeries.x.indexOf(String(targetYear));
+    for (const countrySeries of gData.countries.series) {
+      if (!countrySeries.x || !countrySeries.y) continue;
+      const idx = countrySeries.x.indexOf(String(targetYear));
       if (idx >= 0) {
-        const val = Number(regionSeries.y[idx] || 0);
+        const val = Number(countrySeries.y[idx] || 0);
         if (val > 0) {  // 正の値のみ
-          countryData.push({ label: regionSeries.label, value: val });
+          countryData.push({ label: countrySeries.label, value: val });
           total += val;
         }
       }
@@ -390,7 +398,7 @@ function draw(){
     });
   } else if (view === 'country_bar') {
     // 棒グラフ：国別ランキング（任意年のトップN）
-    if (!gData.regions || !gData.regions.series || gData.regions.series.length === 0) {
+    if (!gData.countries || !gData.countries.series || gData.countries.series.length === 0) {
       ctx.fillText('国別データがありません', 10, 20); ctx.restore(); return;
     }
     const yearFilter = document.getElementById('yearFilter');
@@ -399,13 +407,13 @@ function draw(){
     
     // 各国の値を収集
     const countryData = [];
-    for (const regionSeries of gData.regions.series) {
-      if (!regionSeries.x || !regionSeries.y) continue;
-      const idx = regionSeries.x.indexOf(String(targetYear));
+    for (const countrySeries of gData.countries.series) {
+      if (!countrySeries.x || !countrySeries.y) continue;
+      const idx = countrySeries.x.indexOf(String(targetYear));
       if (idx >= 0) {
-        const val = Number(regionSeries.y[idx] || 0);
+        const val = Number(countrySeries.y[idx] || 0);
         if (val > 0) {  // 正の値のみ
-          countryData.push({ label: regionSeries.label, value: val });
+          countryData.push({ label: countrySeries.label, value: val });
         }
       }
     }
@@ -547,6 +555,24 @@ window.addEventListener('load', () => {
   dz.addEventListener('dragleave', (e)=>{ dz.style.borderColor = '#334155'; });
   dz.addEventListener('drop', (e)=>{ e.preventDefault(); dz.style.borderColor = '#334155'; if (e.dataTransfer.files && e.dataTransfer.files[0]) uploadAndAnalyze(e.dataTransfer.files[0]); });
   
+  // 全画面ドロップ対応（アップロードパネル非表示時でもファイルを受け付ける）
+  document.addEventListener('dragover', (e)=>{ 
+    e.preventDefault(); 
+    // アップロードパネルが非表示の場合は自動表示
+    if (document.getElementById('uploader').style.display === 'none') {
+      showUploadPanel();
+    }
+  });
+  document.addEventListener('drop', (e)=>{ 
+    e.preventDefault(); 
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      if (document.getElementById('uploader').style.display === 'none') {
+        showUploadPanel();
+      }
+      uploadAndAnalyze(e.dataTransfer.files[0]);
+    }
+  });
+  
   // 既存のsummary.jsonがあれば自動読み込み
   loadExistingSummary();
 });
@@ -633,6 +659,11 @@ window.addEventListener('load', () => {
         params.append('year_to', gData.years[gData.years.length - 1]);
       }
       
+      // セッションIDを追加（存在する場合）
+      if (gSessionId) {
+        params.append('sid', gSessionId);
+      }
+      
       // エクスポートURLを生成
       const url = `/api/export?${params.toString()}`;
       
@@ -692,11 +723,18 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             year_from = params.get('year_from', [''])[0]
             year_to = params.get('year_to', [''])[0]
             view = params.get('view', ['timeseries'])[0]
+            sid = params.get('sid', [''])[0]  # セッションID
             
-            # normalized.csvを読み込み（buildディレクトリから）
-            norm_path = 'build/normalized.csv'
-            if not os.path.exists(norm_path):
-                norm_path = 'normalized.csv'  # フォールバック
+            # normalized.csvを読み込み（セッション対応）
+            if sid:
+                # セッションIDが指定されている場合は uploads/<sid>/normalized.csv を使用
+                norm_path = os.path.join('uploads', sid, 'normalized.csv')
+            else:
+                # セッションIDがない場合は既定パス（後方互換性）
+                norm_path = 'normalized.csv'
+                if not os.path.exists(norm_path):
+                    norm_path = 'build/normalized.csv'
+            
             if not os.path.exists(norm_path):
                 self.send_error(404, "No data available. Please upload a file first.")
                 return

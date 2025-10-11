@@ -246,6 +246,27 @@ def extract_region_from_header(header: str) -> Optional[str]:
     return extract_region_from_text(header)
 
 
+def get_region_level(region_name: str) -> Optional[str]:
+    """地域名から level を取得
+    
+    Args:
+        region_name: 正規化された地域名（日本語）
+    
+    Returns:
+        level（'country', 'region', 'group', 'total'）、見つからない場合はNone
+    """
+    if not region_name:
+        return None
+    
+    regions = load_region_dictionary()
+    for region in regions:
+        canonical = region.get("canonical", "")
+        if canonical == region_name:
+            return region.get("level")
+    
+    return None
+
+
 # -------------------- Unit / side / metric detection --------------------
 
 UNIT_SCALES = [
@@ -561,9 +582,12 @@ def build_summary_multi_measure(norm_rows: List[Dict[str, object]], top_n: int =
     agg: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
     years_set: set[str] = set()
     regions_set: set[str] = set()
+    countries_set: set[str] = set()
     
     # 地域別・年別の集計
     region_agg: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    # 国別・年別の集計（level=='country'のみ）
+    country_agg: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
     
     for r in norm_rows:
         m = str(r.get("measure"))
@@ -580,6 +604,12 @@ def build_summary_multi_measure(norm_rows: List[Dict[str, object]], top_n: int =
         if region:
             regions_set.add(region)
             region_agg[region][yk] += v
+            
+            # 国レベルのみを分離して集計
+            level = get_region_level(region)
+            if level == "country":
+                countries_set.add(region)
+                country_agg[region][yk] += v
     
     years = sorted(years_set)
     totals = [(m, sum(d.values())) for m, d in agg.items()]
@@ -595,7 +625,7 @@ def build_summary_multi_measure(norm_rows: List[Dict[str, object]], top_n: int =
     comp_sum = sum(comp_values) or 1.0
     comp_share = [v/comp_sum for v in comp_values]
     
-    # 地域別サマリの構築
+    # 地域別サマリの構築（全地域・グループ・国を含む）
     regions_list = sorted(regions_set)
     region_series = []
     for region in regions_list:
@@ -611,6 +641,30 @@ def build_summary_multi_measure(norm_rows: List[Dict[str, object]], top_n: int =
     region_comp_sum = sum(region_comp_values) or 1.0
     region_comp_share = [v/region_comp_sum for v in region_comp_values]
     
+    # 国別サマリの構築（level=='country'のみ）
+    countries_list = sorted(countries_set)
+    country_series = []
+    for country in countries_list:
+        d = country_agg[country]
+        country_series.append({
+            "label": country,
+            "x": years,
+            "y": [d.get(y, 0.0) for y in years]
+        })
+    
+    # 国別ランキング（最新年・降順）
+    country_rankings = []
+    for country in countries_list:
+        val = country_agg[country].get(latest, 0.0)
+        if val > 0:
+            country_rankings.append({"country": country, "value": val})
+    country_rankings.sort(key=lambda x: x["value"], reverse=True)
+    
+    # 国別構成比（最新年）
+    country_comp_values = [country_agg[c].get(latest, 0.0) for c in countries_list]
+    country_comp_sum = sum(country_comp_values) or 1.0
+    country_comp_share = [v/country_comp_sum for v in country_comp_values]
+    
     result = {
         "title": "MVP Summary",
         "years": years,
@@ -619,7 +673,7 @@ def build_summary_multi_measure(norm_rows: List[Dict[str, object]], top_n: int =
         "composition": {"year": latest, "labels": comp_labels, "share": comp_share},
     }
     
-    # 地域データがある場合のみ追加
+    # 地域データがある場合のみ追加（全地域・グループ・国を含む）
     if regions_list:
         result["regions"] = {
             "available": regions_list,
@@ -629,6 +683,20 @@ def build_summary_multi_measure(norm_rows: List[Dict[str, object]], top_n: int =
                 "labels": regions_list,
                 "values": region_comp_values,
                 "share": region_comp_share
+            }
+        }
+    
+    # 国別データがある場合のみ追加（level=='country'のみ）
+    if countries_list:
+        result["countries"] = {
+            "available": countries_list,
+            "series": country_series,
+            "rankings": country_rankings,
+            "composition": {
+                "year": latest,
+                "labels": countries_list,
+                "values": country_comp_values,
+                "share": country_comp_share
             }
         }
     

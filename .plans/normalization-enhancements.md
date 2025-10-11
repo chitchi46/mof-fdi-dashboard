@@ -1,64 +1,64 @@
-# Normalization Pipeline Enhancements
+# 正規化パイプライン強化
 
-## Goal
-- Improve the ingestion pipeline so metric/side detection, unit scaling, and quality flags are more accurate and require less manual correction.
+## 目的（Goal）
+- 取込みパイプラインでの `metric`/`side` 検出、単位スケーリング、品質フラグを高精度化し、手動修正を減らす。
 
-## Scope
-- Strengthen heuristics (and optional configuration) for detecting `metric`, `side`, and other categorical fields.
-- Automate unit and scale factor detection (parse headers/footnotes for multipliers, currency).
-- Enhance quality flags: detect structural breaks, missing segments, suspicious deltas beyond current MAD outlier logic.
-- Provide configuration overrides and audit logging for manual adjustments.
-- Update tests, documentation, and parse logs; ensure backward compatibility of normalized schema.
+## 範囲（Scope）
+- `metric`/`side` 等のカテゴリ検出ヒューリスティクス（必要に応じ設定可能）を強化。
+- 単位/スケール因子の自動検出（ヘッダー/脚注から倍率・通貨を解析）。
+- 品質フラグ拡張：構造的ブレーク、欠落セグメント、現行のMAD外れ値を超える疑義差分の検出。
+- 手動調整のための設定上書きと監査ログを提供。
+- テスト/ドキュメント/パースログを更新し、正規化スキーマの後方互換を確保。
 
-## Deliverables
-- Refactored detection utilities (likely a new module in `src/mof_investviz/normalize_helpers.py`).
-- Expanded unit dictionaries (e.g., `units.yml`) with conversion factors.
-- Configurable rules (YAML/JSON) allowing overrides per dataset (e.g., file pattern → metric).
-- Updated `NormalizeResult.stats` to surface detection confidence + reasons.
-- Extended tests covering new heuristics and edge cases.
-- Documentation describing detection rules and override procedures.
+## 成果物（Deliverables）
+- 検出ユーティリティのリファクタ（例: `src/mof_investviz/normalize_helpers.py`）。
+- 単位辞書（例: `units.yml`）と換算係数の拡充。
+- データセット別に上書き可能な設定（YAML/JSON。例: ファイルパターン→metric）。
+- `NormalizeResult.stats` に検出信頼度と根拠を追加。
+- 新ヒューリスティクス/エッジケースをカバーするテスト。
+- 検出ルールと上書き手順のドキュメント。
 
-## Work Breakdown
-1. **Research & Data Gathering**
-   - Inventory wording variants for metrics/sides/units from sample datasets.
-   - Capture problematic cases (mixed languages, abbreviations) for regression fixtures.
-2. **Refactor Detection Logic**
-   - Modularize detection functions with scoring (weights, thresholds) and structured explanations (for logging/UI display).
-   - Introduce fallback order: explicit overrides → dictionary match → regex heuristics → default `unknown`.
-   - Extend to additional attributes if needed (e.g., `segment_industry`).
-3. **Unit & Scale Automation**
-   - Parse header tokens (兆円, 百万円, USD) and capture both unit + scale factor.
-   - Support multi-factor conversions (currency -> yen) when metadata available.
-   - Emit warnings when conflicting units found in a single table.
-4. **Quality Flag Enhancements**
-   - Implement structural break detection (e.g., change point algorithms, sudden schema change).
-   - Extend outlier detection with YoY % thresholds, rolling std dev.
-   - Log flags with detailed reasons for downstream display.
-5. **Configuration & Overrides**
-   - Define optional config file (per dataset) to set explicit metric/side/unit mapping when heuristics fail.
-   - Allow CLI/script arguments to specify override file.
-6. **Testing & Validation**
-   - Create fixture datasets covering each rule.
-   - Add unit tests for detection modules and integration tests for `normalize_file`.
-   - Update `parse_log.sample.json` to show new metadata.
-7. **Docs & Release**
-   - Document detection logic and override process in docs/README + USAGE.
-   - Communicate changes in CHANGELOG (if introduced) and bump schema version if necessary.
+## 作業分解（Work Breakdown）
+1. 調査とデータ収集
+   - サンプルから metric/side/units の表現揺れを棚卸し。
+   - 難ケース（多言語・略称）を回帰フィクスチャ化。
+2. 検出ロジックの再設計
+   - 重み/しきい値を伴うスコアリングと説明可能なログ構造でモジュール化。
+   - フォールバック順を定義：明示上書き → 辞書一致 → 正規表現 → `unknown`。
+   - 必要なら追加属性（例: `segment_industry`）へ拡張。
+3. 単位・スケール自動化
+   - ヘッダトークン（兆円/百万円/USD等）から単位＋スケールを抽出。
+   - メタがある場合は多段変換（通貨→円）に対応。
+   - 同一表内の単位矛盾を警告。
+4. 品質フラグの拡張
+   - 変化点検出やスキーマ急変を検出。
+   - YoY%しきい値やローリング標準偏差で外れ値検出を補完。
+   - 理由つきでフラグを記録し下流で表示可能に。
+5. 設定と上書き
+   - データセット別コンフィグで metric/side/unit を明示指定可能に。
+   - CLI/スクリプト引数で上書きファイルを指定可能に。
+6. テストと検証
+   - ルールごとのフィクスチャを作成。
+   - 検出モジュールの単体と `normalize_file` の結合テストを追加。
+   - `parse_log.sample.json` に新メタを反映。
+7. 文書とリリース
+   - docs/README と USAGE に検出ロジックと上書き手順を記載。
+   - 必要に応じてCHANGELOGとスキーマ版上げ。
 
-## Dependencies
-- May reuse region dictionary infrastructure for unit dictionaries (shared config loader).
-- Visualization improvements may consume new quality flags; coordinate schema.
+## 依存関係（Dependencies）
+- 単位辞書は地域辞書の仕組みを再利用（共通ローダ）。
+- 可視化側が新しい品質フラグを消費する場合はスキーマ連携。
 
-## Risks & Mitigations
-- **False positives** in heuristics → include confidence scores + fallback to manual overrides.
-- **Complex configuration** → provide sensible defaults and simple override examples.
-- **Performance**? Additional parsing should remain lightweight; profile with large files.
+## リスクと対策（Risks & Mitigations）
+- ヒューリスティクスの誤検知 → 信頼度出力と手動上書きの導線を用意。
+- 設定の複雑化 → デフォルトの充実と簡易例の提供。
+- 性能 → 追加解析は軽量に保ち、大規模でプロファイル確認。
 
-## Open Questions
-- Should we support machine learning-based detection later? (Keep architecture open.)
-- Need for currency conversion (USD/EUR) at this stage or future release?
+## 未決事項（Open Questions）
+- 将来的な ML ベース検出の採用余地。
+- 本段階/将来での通貨換算（USD/EUR）対応の是非。
 
-## Acceptance Criteria
-- Detection accuracy improves (target ≥ 98% correct metric/side assignment on benchmark datasets).
-- Unit scaling automated for all provided samples; manual overrides documented.
-- Enhanced quality flags available in normalized output and parse logs.
+## 受け入れ基準（Acceptance Criteria）
+- 検出精度が向上（ベンチで metric/side の正答率 ≥98%）。
+- すべての提供サンプルで単位スケーリングが自動化、上書き手順が文書化されている。
+- 強化された品質フラグが正規化出力とパースログで利用可能。

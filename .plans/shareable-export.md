@@ -1,54 +1,54 @@
-# Shareable Dashboard Export
+# 共有可能なダッシュボードエクスポート
 
-## Goal
-- Allow users to generate shareable outputs (static HTML bundle or packaged report) that capture the current dashboard state without requiring the local server.
+## 目的（Goal）
+- ローカルサーバなしで現在のダッシュボード状態を再現できる共有出力（静的HTMLバンドル/パッケージ）を生成可能にする。
 
-## Scope
-- Define export format (self-contained HTML, optional assets zip) that embeds filtered data and configuration.
-- Provide CLI and UI triggers for export, reusing existing build pipeline where possible.
-- Ensure exported bundle runs offline with minimal setup.
-- Document usage and limitations (e.g., no live uploads, read-only interactions).
-- Out of scope: deploying to hosted environments or auth-protected sharing.
+## 範囲（Scope）
+- フィルタ済みデータと設定を埋め込む自己完結HTML（必要に応じてアセットzip）を定義。
+- 既存のビルドを再利用しつつ、CLI/UI のトリガを提供する。
+- エクスポートされたバンドルが最小手順でオフライン動作することを保証。
+- 使い方と制約（ライブアップロード不可、読み取り専用）を文書化。
+- 対象外: ホスティングや認証付き共有の仕組み。
 
-## Deliverables
-- Export command (e.g., `python scripts/export_dashboard.py`) and/or `/api/export?type=html`.
-- Template HTML with embedded data (summary JSON, charts, filters) + hashed asset filenames.
-- Optional zipped package including `normalized.csv`, `parse_log.json`, metadata, screenshot.
-- Docs guiding users through export and distribution.
-- Automated smoke test ensuring exported bundle loads in headless browser and renders expected elements.
+## 成果物（Deliverables）
+- エクスポートコマンド（例: `python scripts/export_dashboard.py`）や `/api/export?type=html`。
+- データ（summary JSON/チャート/フィルタ）を埋め込んだテンプレートHTML＋ハッシュ化アセット。
+- 任意: `normalized.csv`、`parse_log.json`、メタデータ、スクリーンショットを含むzipパッケージ。
+- エクスポートと配布手順のドキュメント。
+- ヘッドレスブラウザで読み込み/描画を確認するスモークテスト。
 
-## Work Breakdown
-1. **Format Design**
-   - Decide between single HTML (data embedded) vs. multi-file bundle.
-   - Define metadata manifest (filters applied, generation timestamp, source files).
-2. **Implementation**
-   - Extend build pipeline to accept `--export` flag generating static assets with selected filters.
-   - Serialize current dashboard state (filters, view) into bundle and adjust UI bootstrap to read from embedded data.
-   - Handle asset paths (relative) for offline use; optionally inline CSS/JS.
-3. **UI Integration**
-   - Add “Export dashboard” action to UI (modal with options: include CSVs, anonymize values, etc.).
-   - Provide progress feedback and link to download generated zip.
-4. **Testing & QA**
-   - Automated test that generates export, serves via file://, and checks for chart rendering.
-   - Manual QA checklist (different filters, large data, cross-browser spot checks).
-5. **Documentation**
-   - Update docs/README + USAGE with export instructions, examples, limitations.
-   - Add example bundle under `examples/` for reference.
+## 作業分解（Work Breakdown）
+1. 形式設計
+   - 単一HTML（データ埋め込み）か複数ファイルバンドルかを決定。
+   - メタマニフェスト（適用フィルタ、生成時刻、ソースファイル）を定義。
+2. 実装
+   - ビルドパイプラインに `--export` を拡張し、選択フィルタで静的アセットを生成。
+   - 現在のダッシュボード状態（フィルタ/ビュー）をバンドルへシリアライズし、UI起動時に埋め込みデータを読むよう調整。
+   - オフライン向けにアセットパス（相対）を処理し、必要に応じてCSS/JSをインライン化。
+3. UI統合
+   - 「ダッシュボードをエクスポート」アクション（CSV同梱、値の匿名化等のオプション）。
+   - 進行表示とzipダウンロードリンクの提供。
+4. テスト/QA
+   - 生成物を file:// で開いて描画確認する自動テスト。
+   - 手動QAチェックリスト（異なるフィルタ、大規模データ、主要ブラウザ）。
+5. 文書化
+   - docs/README と USAGE に手順/例/制約を追記。
+   - `examples/` に参考バンドルを追加。
 
-## Dependencies
-- Relies on CSV export infrastructure (reuse for including data files).
-- Visualization upgrade should ensure charts can bootstrap from static data (no API calls).
+## 依存関係（Dependencies）
+- CSVエクスポート基盤（データファイル同梱に再利用）。
+- 可視化アップグレードで静的データからの起動（API不要）を担保。
 
-## Risks & Mitigations
-- **Large bundle size** → allow excluding heavy datasets or compress outputs.
-- **Security concerns** (embedding raw data) → include warnings and options to anonymize sensitive fields.
-- **Stale assets** if UI changes frequently → version bundle format and provide compatibility layer.
+## リスクと対策（Risks & Mitigations）
+- バンドル肥大 → 重いデータの除外や圧縮オプション。
+- データ埋め込みに伴う注意 → 注意喚起と匿名化オプションを用意。
+- UI更新との乖離 → バンドル形式の版管理と互換レイヤ。
 
-## Open Questions
-- Should exports support password protection or obfuscation? (Probably later.)
-- Need for automated screenshot thumbnails?
+## 未決事項（Open Questions）
+- パスワード保護/難読化の対応（将来検討）。
+- サムネイル自動生成の要否。
 
-## Acceptance Criteria
-- Users can export a filtered dashboard and open it offline with full interactivity.
-- Export process documented and covered by smoke tests.
-- Bundles include necessary metadata (filters, generation timestamp, version).
+## 受け入れ基準（Acceptance Criteria）
+- フィルタ適用済みダッシュボードをエクスポートし、オフラインで完全に操作可能。
+- プロセスが文書化されスモークテストで担保されている。
+- フィルタ/生成時刻/バージョン等のメタデータを同梱する。

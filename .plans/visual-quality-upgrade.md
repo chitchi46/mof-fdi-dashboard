@@ -1,67 +1,65 @@
-# Visualization Quality Upgrade
+# 可視化品質の向上
 
-## Goal
-- Deliver publication-ready charts with clear axes, typography, color schemes, responsive layouts, and rich interaction (tooltips, legends, annotations) across all dashboard views.
+## 目的（Goal）
+- 全ビューで、軸・タイポグラフィ・配色・レスポンシブ・豊富なインタラクション（ツールチップ/凡例/注釈）を備えた公開品質のチャートを提供する。
 
-## Scope
-- Evaluate whether to refactor current Canvas implementation or adopt a charting library (ECharts/uPlot/etc.), then execute chosen approach.
-- Upgrade styling: axes ticks, labels, gridlines, color palettes, font usage, responsive sizing, high-DPI rendering.
-- Improve interactions: tooltips with numeric formatting, crosshair, legend toggles, animations, annotation overlays.
-- Ensure accessibility (color contrast, keyboard navigation hooks) and localization support.
-- Update screenshot/QA scripts and documentation.
-- Out of scope: full theming system or alternate light mode (unless time permits).
+## 範囲（Scope）
+- 現行Canvasのリファクタか、グラフライブラリ（ECharts/uPlot等）採用を評価し、選択方針で実装。
+- スタイリング強化：軸目盛・ラベル・グリッド・配色・フォント・レスポンシブ・高DPI。
+- インタラクション改善：数値フォーマット付きツールチップ、クロスヘア、凡例トグル、アニメ、注釈オーバーレイ。
+- アクセシビリティ（色コントラスト、キーボード操作）とローカライズ対応。
+- スクリーンショット/QAスクリプトとドキュメントを更新。
+- 対象外: 完全なテーマシステムや別のライトモード（時間が許せば）。
 
-## Deliverables
-- Design brief summarizing visual/interaction requirements and library decision.
-- Refactored chart rendering module(s) with shared utilities for scales, formatting, layout.
-- Enhanced legend/tooltip components supporting multi-series overlays.
-- Annotation API (expose from summary or external config) for highlighting events/outliers.
-- Updated CSS/styling aligned with design tokens.
-- Documentation with before/after visuals and usage tips.
-- Automated visual regression tests (e.g., Playwright screenshot diff) for key views.
+## 成果物（Deliverables）
+- 視覚/インタラクション要件とライブラリ選定の設計サマリ。
+- スケール/フォーマット/レイアウトの共通ユーティリティを持つ描画モジュール。
+- 多系列オーバーレイに対応した凡例/ツールチップ。
+- 注釈API（サマリ/外部設定からイベント/外れ値を強調）。
+- デザイントークンに沿ったCSS/スタイル。
+- Before/Afterのドキュメントと利用Tips。
+- 可視回帰テスト（Playwrightのスクショ差分等）。
 
-## Work Breakdown
-1. **Discovery & Design**
-   - Audit current charts, gather stakeholder feedback, define success metrics (readability, frame rate).
-   - Prototype candidate libraries or improved Canvas renderers; select approach based on performance + maintainability.
-   - Create design tokens (colors, spacing, typography) and chart layout guidelines.
-2. **Rendering Architecture**
-   - Abstract data → chart-series transformation (common scales, formatting helpers).
-   - Implement base chart component (axes, grid, responsive canvas/SVG) and extend for each view (timeseries, yoy diff, composition, heatmap, boxplot).
-   - Ensure devicePixelRatio-aware canvas sizing and resize observers.
-3. **Interaction Layer**
-   - Build tooltips with crosshair, value formatting, multi-series display.
-   - Implement legend toggles, overlay toggles, highlight selected series.
-   - Add keyboard focus & accessible descriptions (ARIA labels).
-4. **Annotations & Highlighting**
-   - Define annotation schema (events, breaks, outliers) consumed from summary or external config.
-   - Render markers/bands with tooltips; allow toggling.
-5. **Styling & Theming**
-   - Apply color palettes (color-blind safe), define gradients for heatmaps, unify fonts.
-   - Add margin/padding auto-calculation to prevent label clipping.
-6. **Quality Assurance**
-   - Write unit tests for formatting utilities.
-   - Add visual regression snapshots for each view/resolution.
-   - Performance benchmark (render time <16ms for 5k points, maintain 60fps interactions).
-7. **Docs & Rollout**
-   - Update README/docs with new screenshots and configuration options.
-   - Provide migration notes if chart API changed, including version bump.
+## 作業分解（Work Breakdown）
+1. 調査/設計
+   - 現状チャートの監査、要望収集、成功指標（可読性/フレームレート）を定義。
+   - 候補ライブラリ/改良Canvasの試作、性能/保守性で選定。
+   - デザイントークン（色・間隔・書体）とレイアウト指針を作成。
+2. レンダリングアーキテクチャ
+   - データ→系列変換を抽象化（共通スケール/整形ヘルパ）。
+   - ベースチャート（軸/グリッド/レスポンシブCanvas/SVG）を実装し、各ビュー（時系列/前年比差分/構成比/ヒートマップ/箱ひげ）へ拡張。
+   - devicePixelRatio考慮のキャンバス調整とリサイズ監視。
+3. インタラクション層
+   - クロスヘア/多系列表示のツールチップ、値整形を実装。
+   - 凡例/オーバーレイトグル、選択系列のハイライト。
+   - キーボードフォーカスとARIA説明。
+4. 注釈・ハイライト
+   - 注釈スキーマ（イベント/ブレーク/外れ値）を定義し、マーカー/帯とツールチップ、表示切替を実装。
+5. スタイリング/テーマ
+   - 色覚多様性に配慮したパレット、ヒートマップ用グラデ、フォント統一。
+   - 余白自動計算でラベルのはみ出し防止。
+6. 品質保証
+   - 整形ユーティリティの単体、各ビュー/解像度の可視回帰スナップショット。
+   - 性能指標: 5k点で<16ms描画、操作中60fps維持を目標。
+7. ドキュメント/展開
+   - README/docsを新スクリーンショットと設定で更新。
+   - API変更があれば移行ノートとバージョン更新。
 
-## Dependencies
-- Region/filter and export work may alter data payloads; coordinate interfaces.
-- Annotation schema may depend on pipeline enhancements (see `.plans/normalization-enhancements.md`).
+## 依存関係（Dependencies）
+- 地域/フィルタ/エクスポート作業でデータ契約が変わる可能性があるため調整。
+- 注釈スキーマはパイプライン強化（`.plans/normalization-enhancements.md`）に依存しうる。
 
-## Risks & Mitigations
-- **Library bloat** → evaluate bundle size; enable code-splitting or tree-shaking.
-- **Performance regressions** → benchmark early, keep fallback to current renderer.
-- **Complexity** → modularize components, document API for maintainers.
+## リスクと対策（Risks & Mitigations）
+- ライブラリ肥大 → バンドルサイズ評価、コード分割/ツリーシェイク。
+- 性能回帰 → 早期ベンチ、現行レンダラのフォールバック維持。
+- 複雑化 → コンポーネントのモジュール化とAPIドキュメント。
 
-## Open Questions
-- Target minimum browser set? (IE/legacy support not planned.)
-- Need for dark/light theme toggle at this stage?
-- Should charts support image/PDF export concurrently with CSV work?
+## 未決事項（Open Questions）
+- 最低対応ブラウザ（IE/レガシーは想定外）。
+- 本段階でのダーク/ライト切替の要否。
+- 画像/PDFエクスポートをCSVと並行対応するか。
 
-## Acceptance Criteria
-- Visual QA passes for all views on retina and standard displays.
-- Tooltips, legends, and annotations operate consistently with filters/overlays.
-- Stakeholders sign off on readability improvements (side-by-side comparison available).
+## 受け入れ基準（Acceptance Criteria）
+- すべてのビューでRetina/標準表示の視覚QAをパス。
+- ツールチップ/凡例/注釈がフィルタ/オーバーレイと一貫して動作。
+- 並列比較で可読性向上に合意が得られる。

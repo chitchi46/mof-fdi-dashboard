@@ -1,52 +1,52 @@
-# Additional MOF Dataset Support
+# 追加データセット対応
 
-## Goal
-- Extend the pipeline to handle additional Ministry of Finance direct investment tables beyond 6d-1-1/6d-2, ensuring consistent normalization and visualization.
+## 目的（Goal）
+- 6d-1-1/6d-2 以外の公的機関が公表する直接投資関連表にもパイプラインを拡張し、正規化と可視化の一貫性を確保する。
 
-## Scope
-- Identify priority tables (e.g., quarterly series, industry breakdowns) and gather samples.
-- Update normalization heuristics/dictionaries to accommodate new layouts (multi-level headers, extra columns).
-- Expand tests, docs, and examples showcasing the new datasets.
-- Adjust dashboard summaries and filters to handle new measures/segments gracefully.
-- Out of scope: fully generic ingestion of all MOF publications (focus on agreed subset first).
+## 範囲（Scope）
+- 優先テーブル（例: 四半期系列、産業別内訳）を特定し、サンプルを収集する。
+- 新しいレイアウト（多層ヘッダー、追加列など）に対応できるよう、正規化のヒューリスティクス/辞書を更新する。
+- 新データセットを示すテスト・ドキュメント・サンプルを拡充する。
+- ダッシュボードのサマリ/フィルタを調整し、新しい指標/セグメントが増えても破綻しないようにする。
+- 対象外: すべての公表物を完全に汎用取り込みすること（まずは合意済みのサブセットに集中）。
 
-## Deliverables
-- Dataset inventory with metadata (source URL, frequency, unique fields).
-- Updated normalization logic + fixtures verifying correct output for each new table.
-- Example normalized CSVs + parse logs for QA.
-- Documentation updates (README, docs/README, USAGE) enumerating supported datasets and caveats.
-- Optional CLI helper to download latest MOF files.
+## 成果物（Deliverables）
+- データセット台帳（出典URL、頻度、固有フィールド等のメタデータ）。
+- 各新表に対して正しい出力を検証する更新済み正規化ロジック＋フィクスチャ。
+- 検証用の正規化CSVとパースログの例。
+- README、docs/README、USAGE の更新（対応データセットと注意点の一覧）。
+- 任意: 最新の公表ファイルを取得するCLIヘルパー。
 
-## Work Breakdown
-1. **Dataset Discovery**
-   - Collaborate with stakeholders to prioritize tables; collect sample CSV/Excel files.
-   - Document schema variations (extra segments, fiscal vs. calendar year, units).
-2. **Normalization Adjustments**
-   - Extend header detection to handle deeper hierarchies or repeated blocks.
-   - Map new metrics/segments to schema enumerations or extend schema if needed.
-   - Ensure unit detection covers new unit/scale combinations.
-3. **Validation & Testing**
-   - Create fixtures + expected outputs; add regression tests.
-   - Validate with domain experts (spot check against known totals).
-4. **Dashboard Adaptation**
-   - Confirm new measures integrate into summaries without clutter (maybe ranking, filtering by measure group).
-   - Update UI labels/translations for new metrics/segments.
-5. **Documentation & Release**
-   - Update docs with supported dataset table and usage notes.
-   - Provide example notebook or walkthrough analyzing new dataset.
+## 作業分解（Work Breakdown）
+1. データセット調査（Dataset Discovery）
+   - 関係者と優先テーブルを決め、CSV/Excel のサンプルを収集する。
+   - スキーマ差異（追加セグメント、会計年度 vs 暦年、単位）をドキュメント化する。
+2. 正規化調整（Normalization Adjustments）
+   - より深い階層や繰り返しブロックに対応するヘッダー検出を拡張する。
+   - 新しい指標/セグメントをスキーマ列挙にマッピング（必要ならスキーマ拡張）。
+   - 単位検出を拡張し、新しい単位/スケールの組合せをカバーする。
+3. 検証とテスト（Validation & Testing）
+   - フィクスチャと期待出力を作成し、回帰テストを追加する。
+   - 既知の合計等でドメイン確認（スポットチェック）。
+4. ダッシュボード適応（Dashboard Adaptation）
+   - 新しい指標がサマリへ過不足なく統合されることを確認（ランキングや指標グループ別フィルタ等）。
+   - 新規指標/セグメントのUIラベル/表記を更新する。
+5. 文書化とリリース（Documentation & Release）
+   - 対応データセット表と利用ノートを docs に追記する。
+   - 新データセットを分析するノートブック/手順例を用意する。
 
-## Dependencies
-- Normalization enhancements (see `.plans/normalization-enhancements.md`) will aid in handling varied inputs.
-- Visualization & export improvements ensure new metrics appear consistently.
+## 依存関係（Dependencies）
+- 正規化強化（`.plans/normalization-enhancements.md`）は多様な入力の取り扱いに有用。
+- 可視化/エクスポートの改善により新指標の表示一貫性を担保。
 
-## Risks & Mitigations
-- **Schema drift** from MOF updates → monitor source, add parser versioning.
-- **Excel-specific quirks** → leverage pandas/openpyxl if CSV not available, with tests.
+## リスクと対策（Risks & Mitigations）
+- 公表側のスキーマ変更（Schema drift）→ ソース監視とパーサのバージョニングで対処。
+- Excel 固有の癖 → CSV がない場合は pandas/openpyxl を活用し、テストで担保。
 
-## Open Questions
-- Need to support Excel ingestion in this phase?
-- Are there licensing or redistribution constraints per dataset?
+## 未決事項（Open Questions）
+- 本フェーズで Excel 取り込みをサポートするか？
+- データセットごとのライセンス/再配布制約はあるか？
 
-## Acceptance Criteria
-- At least two additional MOF tables successfully normalized and visualized end-to-end.
-- Tests and documentation clearly state support level and limitations.
+## 受け入れ基準（Acceptance Criteria）
+- 少なくとも 2 種類の追加表を、正規化から可視化までエンドツーエンドで対応できている。
+- テストとドキュメントにサポート範囲と制約が明確に記載されている。
